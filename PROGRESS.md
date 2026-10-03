@@ -61,11 +61,12 @@
 **Decisions:**
 - ADR-001: MongoDB over Postgres → `docs/decisions/001-mongodb-over-postgres.md`
 
-**Source Control & Documentation:**
+**Source Control, Tooling & Documentation:**
 - ✅ Git repo initialized on `main` branch
 - ✅ Remote origin connected: `https://github.com/jaikrishnaverma-dev/ai-mcp-hub.git`
 - ✅ Initial code commit pushed to GitHub (`main`)
 - ✅ `README.md` created with complete architecture, tool table, setup instructions, and roadmap
+- ✅ `start.sh` automated launcher created (Docker check/boot, MongoDB RS & Redis check, build, auto-seed, and MCP dev server)
 
 **What's remaining in Phase 1:**
 - [ ] Spin up MongoDB replica set & Redis (start Docker Compose or local mongod)

@@ -4,6 +4,7 @@
   "description": "AI-Native Process Manager — MCP server + React portal",
   "scripts": {
     "dev": "turbo dev",
+    "start": "bash start.sh",
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",

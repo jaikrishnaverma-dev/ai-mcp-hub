@@ -105,33 +105,36 @@ todo-assistance/
 - **pnpm** >= 9.0.0
 - **Docker & Docker Compose** (for MongoDB replica set & Redis)
 
-### 2. Installation & Environment Setup
-Clone the repository and install dependencies:
+### 2. One-Command Start (Recommended)
+You can launch the entire stack (Docker daemon check, MongoDB replica set, Redis, build, auto-seed, and MCP server) with a single command:
 ```bash
-git clone https://github.com/jaikrishnaverma-dev/ai-mcp-hub.git
-cd ai-mcp-hub
-pnpm install
+./start.sh
+# or: pnpm start
+# to re-seed fresh demo data: ./start.sh --seed
 ```
 
-Copy the environment template:
+---
+
+### Manual Step-by-Step Setup
+If you prefer running each step individually:
+
+1. **Install dependencies & set env:**
 ```bash
+pnpm install
 cp .env.example apps/server/.env
 ```
 
-### 3. Start Database Services
-Spin up the MongoDB replica set and Redis containers:
+2. **Start Database Services:**
 ```bash
 docker compose up -d
 ```
 
-### 4. Seed Initial Data
-Seed demo user, a default `daily-assistant` endpoint slug, sample items, and blockers:
+3. **Seed Initial Data:**
 ```bash
 pnpm --filter @assistant/server seed
 ```
 
-### 5. Run the Server
-Start the development server with live reload:
+4. **Run Server:**
 ```bash
 pnpm --filter @assistant/server dev
 ```
