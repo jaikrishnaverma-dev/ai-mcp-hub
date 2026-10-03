@@ -58,6 +58,7 @@ DEFAULT_TIMEZONE=Asia/Kolkata
 LOG_LEVEL=info
 MONGODB_URI="${TARGET_MONGO_URI}"
 SPENT_API_URL="https://apptiva.in/backend/api/login.php"
+PUBLIC_URL="https://mcphub.apptiva.in"
 EOF
 
 tar -czf deploy-mcphub.tar.gz -C dist-mcphub .

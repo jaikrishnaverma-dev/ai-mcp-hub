@@ -40,6 +40,14 @@ function makeCurlRequest($nodePort) {
                 }
             }
         }
+        $publicHost = $_SERVER['HTTP_HOST'] ?? 'mcphub.apptiva.in';
+        $publicProto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $headers[] = 'Host: ' . $publicHost;
+        $headers[] = 'X-Forwarded-Host: ' . $publicHost;
+        $headers[] = 'X-Forwarded-Proto: ' . $publicProto;
+        if (!empty($_SERVER['REMOTE_ADDR'])) {
+            $headers[] = 'X-Forwarded-For: ' . $_SERVER['REMOTE_ADDR'];
+        }
 
         $contentType = $_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '';
 

@@ -11,10 +11,23 @@ export const oauthRouter: Router = Router();
 /**
  * 1. RFC 8414: OAuth 2.0 Authorization Server Metadata Discovery
  */
+function getOAuthBaseUrl(req: Request): string {
+  const envBase = process.env['PUBLIC_URL'] || process.env['BASE_URL'];
+  if (envBase) return envBase.replace(/\/+$/, '');
+  const forwardedHost = req.get('x-forwarded-host');
+  const hostHeader = req.get('host') || '';
+  let host = forwardedHost || hostHeader || 'mcphub.apptiva.in';
+  if (host.includes('145.79.25.57') || host.includes('5060') || !host) {
+    host = 'mcphub.apptiva.in';
+  }
+  const proto = (host.includes('localhost') || host.includes('127.0.0.1'))
+    ? (req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http'))
+    : 'https';
+  return `${proto}://${host}`;
+}
+
 oauthRouter.get('/.well-known/oauth-authorization-server', (req: Request, res: Response) => {
-  const host = req.get('host') || 'localhost:3000';
-  const proto = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
-  const baseUrl = `${proto}://${host}`;
+  const baseUrl = getOAuthBaseUrl(req);
 
   res.json({
     issuer: baseUrl,
@@ -25,6 +38,17 @@ oauthRouter.get('/.well-known/oauth-authorization-server', (req: Request, res: R
     grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256', 'plain'],
     scopes_supported: ['read', 'write'],
+  });
+});
+
+oauthRouter.get('/.well-known/oauth-protected-resource', (req: Request, res: Response) => {
+  const baseUrl = getOAuthBaseUrl(req);
+
+  res.json({
+    resource: baseUrl,
+    authorization_servers: [baseUrl],
+    scopes_supported: ['read', 'write'],
+    bearer_methods_supported: ['header'],
   });
 });
 
