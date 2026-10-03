@@ -2,14 +2,16 @@
   RewriteEngine On
   RewriteBase /
 
-  # Proxy /api, /mcp, and /health requests to PHP proxy
+  # Proxy /api, /mcp, /health, /oauth/token, and .well-known requests to PHP proxy
   RewriteRule ^api/(.*)$ api.php [L,QSA]
   RewriteRule ^api$ api.php [L,QSA]
   RewriteRule ^mcp/(.*)$ api.php [L,QSA]
   RewriteRule ^mcp$ api.php [L,QSA]
   RewriteRule ^health$ api.php [L,QSA]
+  RewriteRule ^oauth/token$ api.php [L,QSA]
+  RewriteRule ^\.well-known/(.*)$ api.php [L,QSA]
 
-  # React SPA fallback for client-side routing
+  # React SPA fallback for client-side routing (including /oauth/authorize, /workflows, /tools, /settings)
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /index.html [L]

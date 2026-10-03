@@ -60,6 +60,15 @@ async function main() {
   app.use(oauthRouter);
 
   // MCP endpoints — scoped by endpoint slug
+  app.get('/mcp/:slug', (req, res) => {
+    const slug = req.params['slug'];
+    res.json({
+      status: 'active',
+      type: 'mcp-streamable-http',
+      endpoint: `/mcp/${slug}`,
+      message: 'This is a Streamable HTTP MCP endpoint. Connect via Claude, ChatGPT, or Cursor using POST JSON-RPC 2.0 requests.',
+    });
+  });
   app.post('/mcp/:slug', handleMcpRequest);
   app.delete('/mcp/:slug', handleMcpDelete);
 
@@ -82,9 +91,16 @@ async function main() {
     logger.info({ path: activePortalDist }, 'Serving static portal frontend');
     app.use(express.static(activePortalDist));
     app.use((req, res, next) => {
-      if (req.path.startsWith('/api') || req.path.startsWith('/mcp') || req.path.startsWith('/health') || req.path.startsWith('/oauth')) {
+      // API routes and OAuth token exchange are handled by backend handlers
+      if (
+        req.path.startsWith('/api') ||
+        req.path.startsWith('/health') ||
+        req.path === '/oauth/token' ||
+        req.path.startsWith('/.well-known')
+      ) {
         return next();
       }
+      // Everything else (including /oauth/authorize, /workflows, /tools, /settings) serves the React SPA
       res.sendFile(path.join(activePortalDist, 'index.html'));
     });
   }
