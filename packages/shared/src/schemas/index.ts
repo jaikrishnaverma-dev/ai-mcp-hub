@@ -7,3 +7,4 @@ export * from './activity.js';
 export * from './decisions.js';
 export * from './blockers.js';
 export * from './endpoints.js';
+export * from './workflows.js';

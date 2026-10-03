@@ -14,12 +14,31 @@ export interface UserProfile {
   createdAt?: string;
 }
 
+export interface ExternalMcpTool {
+  name: string;
+  description: string;
+  inputSchema?: Record<string, unknown>;
+}
+
+export interface ExternalMcpIntegration {
+  id: string;
+  name: string;
+  url: string;
+  status: 'active' | 'error' | 'disabled';
+  tools: ExternalMcpTool[];
+  toolCount: number;
+  createdAt: string;
+}
+
 export interface McpTool {
   name: string;
   description: string;
   requiredScope: 'read' | 'write';
   inputSchema: Record<string, unknown>;
   category?: string;
+  isExternal?: boolean;
+  source?: 'native' | 'external';
+  serverName?: string;
 }
 
 export type McpToolCatalogItem = McpTool;
@@ -183,14 +202,14 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 const TOOL_CATEGORIES: Record<string, string> = {
   get_daily_brief: 'Planning & Briefing',
-  create_task:     'Task Management',
-  update_task:     'Task Management',
-  complete_task:   'Task Management',
-  list_tasks:      'Task Management',
-  get_task:        'Task Management',
-  log_decision:    'Architecture & Decisions',
-  link_tasks:      'Dependencies & Graphs',
-  set_blocker:     'Blocker Tracking',
+  create_task: 'Task Management',
+  update_task: 'Task Management',
+  complete_task: 'Task Management',
+  list_tasks: 'Task Management',
+  get_task: 'Task Management',
+  log_decision: 'Architecture & Decisions',
+  link_tasks: 'Dependencies & Graphs',
+  set_blocker: 'Blocker Tracking',
 };
 
 export function categorizeTool(name: string): string {
@@ -356,6 +375,21 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
     }),
+
+  // External MCP Integrations (e.g. Spent App)
+  getExternalMcps: () => fetchJson<{ integrations: ExternalMcpIntegration[] }>('/api/external-mcps'),
+  addExternalMcp: (data: { name: string; url: string; authToken?: string }) =>
+    fetchJson<{ success: boolean; integration: ExternalMcpIntegration }>('/api/external-mcps', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  testExternalMcp: (data: { url: string; authToken?: string }) =>
+    fetchJson<{ success: boolean; count: number; tools: ExternalMcpTool[] }>('/api/external-mcps/test', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  deleteExternalMcp: (id: string) =>
+    fetchJson<{ success: boolean }>(`/api/external-mcps/${id}`, { method: 'DELETE' }),
 
   // Dashboard & Process Data
   getDailyBrief: () => fetchJson<DailyBriefResponse>('/api/daily-brief'),

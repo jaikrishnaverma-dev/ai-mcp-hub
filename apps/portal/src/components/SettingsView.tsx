@@ -19,7 +19,11 @@ import {
   Trash2,
   Cpu,
   Layers,
+  Plug,
 } from 'lucide-react';
+import {
+  type ExternalMcpIntegration,
+} from '../api/client.js';
 import { Button } from './ui/button.js';
 import { Label } from './ui/label.js';
 
@@ -36,16 +40,19 @@ export function SettingsView({ currentUser, onRequireAuth }: SettingsViewProps) 
   const [loading, setLoading] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [createdClient, setCreatedClient] = useState<OAuthClientItem | null>(null);
+  const [externalMcps, setExternalMcps] = useState<ExternalMcpIntegration[]>([]);
 
   const loadData = async () => {
     if (!currentUser) return;
     setLoading(true);
     try {
-      const [epRes, clRes] = await Promise.all([
+      const [epRes, clRes, extRes] = await Promise.all([
         api.getWorkflows().catch(() => ({ endpoints: [] })),
         api.getOAuthClients().catch(() => ({ clients: [] })),
+        api.getExternalMcps().catch(() => ({ integrations: [] })),
       ]);
 
+      setExternalMcps(extRes.integrations || []);
       const eps = epRes.endpoints || [];
       setEndpoints(eps);
       if (eps.length > 0 && !selectedEndpoint) {
@@ -567,6 +574,54 @@ export function SettingsView({ currentUser, onRequireAuth }: SettingsViewProps) 
           </div>
         </div>
       )}
+
+      {/* External MCP Integrations Card */}
+      <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 sm:p-5 space-y-3 shadow-2xs w-full max-w-full overflow-hidden">
+        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Plug className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            <h2 className="text-xs font-bold text-zinc-950 dark:text-zinc-100">
+              External MCP Integrations ({externalMcps.length})
+            </h2>
+          </div>
+          <a
+            href="/tools"
+            className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:underline"
+          >
+            Manage in Tools &rarr;
+          </a>
+        </div>
+
+        {externalMcps.length === 0 ? (
+          <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between text-xs">
+            <span className="text-zinc-500">No external MCP servers connected yet.</span>
+            <a
+              href="/tools"
+              className="text-xs font-semibold text-purple-600 dark:text-purple-400 hover:underline"
+            >
+              + Connect Spent App
+            </a>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {externalMcps.map((mcp) => (
+              <div
+                key={mcp.id}
+                className="p-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 flex items-center justify-between gap-2 text-xs"
+              >
+                <div className="min-w-0 flex-1 truncate">
+                  <span className="font-semibold text-zinc-900 dark:text-zinc-100 mr-2">{mcp.name}</span>
+                  <span className="font-mono text-[10px] text-zinc-500">{mcp.url}</span>
+                </div>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 text-[10px] font-semibold shrink-0">
+                  <CheckCircle2 className="h-3 w-3" />
+                  {mcp.toolCount || mcp.tools?.length || 0} tools
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

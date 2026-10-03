@@ -27,6 +27,9 @@ import { createModuleLogger } from '../config/index.js';
 import { ForbiddenError, AppError } from '../errors.js';
 import type { ServiceContext } from '@assistant/shared';
 
+import { externalMcpService } from '../modules/integrations/service.js';
+import { User } from '../modules/auth/model.js';
+
 const log = createModuleLogger('mcp');
 
 // Register all P1 tools at startup
@@ -79,6 +82,12 @@ export async function handleMcpRequest(req: Request, res: Response): Promise<voi
     endpointScopes: effectiveScopes,
   };
 
+  // Load user's connected external MCP servers (e.g. Spent App)
+  const externalMcps = await externalMcpService.getUserIntegrations(authenticatedUserId);
+  const externalTools = externalMcps.flatMap((m) =>
+    m.tools.map((t) => ({ ...t, mcpUrl: m.url, authToken: m.authToken }))
+  );
+
   // 3. Create a per-request MCP server using low-level Server class
   const server = new Server(
     {
@@ -93,27 +102,52 @@ export async function handleMcpRequest(req: Request, res: Response): Promise<voi
     },
   );
 
-  // 4. Handle tools/list — return only allowed tools
+  // 4. Handle tools/list — return allowed native tools + user's connected external tools
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const allowedTools = toolRegistry.getFiltered(endpoint.toolAllowlist, endpoint.scopes);
+    const nativeTools = allowedTools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema as {
+        type: 'object';
+        properties?: Record<string, unknown>;
+      },
+    }));
+
+    const remoteTools = externalTools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: (t.inputSchema || { type: 'object', properties: {} }) as {
+        type: 'object';
+        properties?: Record<string, unknown>;
+      },
+    }));
+
     return {
-      tools: allowedTools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: tool.inputSchema as {
-          type: 'object';
-          properties?: Record<string, unknown>;
-        },
-      })),
+      tools: [...nativeTools, ...remoteTools],
     };
   });
 
-  // 5. Handle tools/call — RE-CHECK allowlist (security-critical)
+  // 5. Handle tools/call — Proxy external tools or execute native tools
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const toolName = request.params.name;
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
 
-    // SECURITY: Re-check allowlist on every call
+    // Check if it's an external tool from a connected server (e.g. Spent App)
+    const remoteTool = externalTools.find((t) => t.name === toolName);
+    if (remoteTool) {
+      log.info(
+        { tool: toolName, url: remoteTool.mcpUrl, userId: ctx.userId },
+        'Proxying tool call to remote external MCP server',
+      );
+      // Auto-inject user's saved Spent App bearer token
+      const userDoc = await User.findById(ctx.userId);
+      const token = remoteTool.authToken || userDoc?.spentBearer;
+      const res = await externalMcpService.proxyToolCall(remoteTool.mcpUrl, toolName, args, token);
+      return res as unknown as Record<string, unknown>;
+    }
+
+    // SECURITY: Re-check allowlist on every native call
     if (!toolRegistry.isAllowed(toolName, endpoint.toolAllowlist, endpoint.scopes)) {
       return {
         content: [

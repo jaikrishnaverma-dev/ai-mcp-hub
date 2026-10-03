@@ -1,6 +1,6 @@
 import {
   LayoutDashboard,
-  Server,
+  Workflow,
   Sparkles,
   Database,
   Settings,
@@ -15,7 +15,7 @@ interface MobileBottomNavProps {
 export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps) {
   const items = [
     { id: 'brief' as const, label: 'Brief', icon: LayoutDashboard },
-    { id: 'endpoints' as const, label: 'Endpoints', icon: Server },
+    { id: 'workflows' as const, label: 'Workflows', icon: Workflow },
     { id: 'marketplace' as const, label: 'Tools', icon: Sparkles },
     { id: 'data' as const, label: 'Explorer', icon: Database },
     { id: 'settings' as const, label: 'Settings', icon: Settings },

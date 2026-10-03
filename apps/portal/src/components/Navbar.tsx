@@ -10,7 +10,6 @@ import {
 import { type UserProfile, setActiveUser } from '../api/client.js';
 import {
   Sparkles,
-  Server,
   Database,
   LogIn,
   LogOut,
@@ -18,9 +17,10 @@ import {
   Moon,
   LayoutDashboard,
   Settings,
+  Workflow,
 } from 'lucide-react';
 
-export type NavTab = 'brief' | 'endpoints' | 'marketplace' | 'data' | 'settings';
+export type NavTab = 'brief' | 'workflows' | 'endpoints' | 'marketplace' | 'data' | 'settings';
 
 interface NavbarProps {
   activeTab: NavTab;
@@ -43,7 +43,7 @@ export function Navbar({
 }: NavbarProps) {
   const tabs = [
     { id: 'brief' as const, label: 'Daily Brief', icon: LayoutDashboard },
-    { id: 'endpoints' as const, label: 'MCP Server & Endpoints', icon: Server },
+    { id: 'workflows' as const, label: 'Workflows', icon: Workflow },
     { id: 'marketplace' as const, label: 'Tools & Skills', icon: Sparkles },
     { id: 'data' as const, label: 'Users\' Data Explorer', icon: Database },
     { id: 'settings' as const, label: 'Settings & Connect AI', icon: Settings },
@@ -92,9 +92,9 @@ export function Navbar({
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => onTabChange('endpoints')} className="text-xs cursor-pointer">
-                  <Server className="mr-2 h-3.5 w-3.5" />
-                  <span>My MCP Endpoints</span>
+                <DropdownMenuItem onClick={() => onTabChange('workflows')} className="text-xs cursor-pointer">
+                  <Workflow className="mr-2 h-3.5 w-3.5" />
+                  <span>My Workflows</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onTabChange('data')} className="text-xs cursor-pointer">
                   <Database className="mr-2 h-3.5 w-3.5" />

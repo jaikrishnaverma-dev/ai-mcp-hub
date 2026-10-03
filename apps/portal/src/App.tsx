@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import { Navbar, type NavTab } from './components/Navbar.js';
 import { MobileBottomNav } from './components/MobileBottomNav.js';
 import { DailyBriefView } from './components/DailyBriefView.js';
-import { EndpointsView } from './components/EndpointsView.js';
+import { WorkflowsView } from './components/WorkflowsView.js';
 import { CatalogView } from './components/CatalogView.js';
 import { DataBrowserView } from './components/DataBrowserView.js';
 import { OAuthConsentView } from './components/OAuthConsentView.js';
@@ -20,7 +20,8 @@ import {
 
 const PATH_MAP: Record<NavTab, string> = {
   marketplace: '/tools',
-  endpoints: '/endpoints',
+  workflows: '/workflows',
+  endpoints: '/workflows',
   data: '/explorer',
   brief: '/brief',
   settings: '/settings',
@@ -28,7 +29,7 @@ const PATH_MAP: Record<NavTab, string> = {
 
 function getActiveTabFromPath(pathname: string): NavTab {
   if (pathname.startsWith('/brief')) return 'brief';
-  if (pathname.startsWith('/endpoints')) return 'endpoints';
+  if (pathname.startsWith('/workflows') || pathname.startsWith('/endpoints')) return 'workflows';
   if (pathname.startsWith('/explorer') || pathname.startsWith('/data')) return 'data';
   if (pathname.startsWith('/settings') || pathname.startsWith('/connect')) return 'settings';
   if (pathname.startsWith('/tools') || pathname.startsWith('/marketplace')) return 'marketplace';
@@ -84,11 +85,11 @@ export function App() {
   };
 
   const handleHarnessSkill = (_skill: Skill) => {
-    navigate('/endpoints');
+    navigate('/workflows');
   };
 
   const handleHarnessTool = (_tool: McpTool) => {
-    navigate('/endpoints');
+    navigate('/workflows');
   };
 
   return (
@@ -133,14 +134,15 @@ export function App() {
             }
           />
           <Route
-            path="/endpoints"
+            path="/workflows"
             element={
-              <EndpointsView
+              <WorkflowsView
                 currentUser={currentUser}
                 onRequireAuth={handleOpenLogin}
               />
             }
           />
+          <Route path="/endpoints" element={<Navigate to="/workflows" replace />} />
           <Route
             path="/explorer"
             element={

@@ -33,6 +33,7 @@ import { Blocker } from '../modules/blockers/model.js';
 import { Endpoint } from '../modules/endpoints/model.js';
 import { User } from '../modules/auth/model.js';
 import { Activity } from '../modules/activity/model.js';
+import { externalMcpService } from '../modules/integrations/service.js';
 import { AppError, NotFoundError } from '../errors.js';
 
 export const apiRouter: Router = Router();
@@ -202,21 +203,149 @@ apiRouter.post('/auth/login', async (req: Request, res: Response, next: NextFunc
 // 2. MCP Server & Endpoints Management
 // ==============================================================================
 
-// Tool Catalog — all available tools that can be bound to endpoints
-apiRouter.get('/mcp-catalog', (_req: Request, res: Response) => {
-  const allTools = toolRegistry.getAll();
-  res.json({
-    tools: allTools.map(t => ({
+// Tool Catalog — all available tools that can be bound to endpoints/workflows
+apiRouter.get('/mcp-catalog', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const allTools = toolRegistry.getAll();
+    const nativeTools = allTools.map((t) => ({
       name: t.name,
       description: t.description,
       requiredScope: t.requiredScope,
       inputSchema: t.inputSchema,
-    })),
-  });
+      isExternal: false,
+      source: 'native' as const,
+      category: 'Built-in',
+    }));
+
+    const user = (req as Request & { currentUser?: any }).currentUser;
+    const externalToolsList: any[] = [];
+    if (user) {
+      const integrations = await externalMcpService.getUserIntegrations(user._id.toString());
+      for (const m of integrations) {
+        for (const t of m.tools) {
+          externalToolsList.push({
+            name: t.name,
+            description: t.description || `Remote tool from ${m.name}`,
+            requiredScope: 'write' as const,
+            inputSchema: t.inputSchema || {},
+            isExternal: true,
+            source: 'external' as const,
+            serverName: m.name,
+            category: `External: ${m.name}`,
+          });
+        }
+      }
+    }
+
+    res.json({
+      tools: [...nativeTools, ...externalToolsList],
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
-// List Endpoints for the logged-in user
-apiRouter.get('/endpoints', async (req: Request, res: Response, next: NextFunction) => {
+// ==============================================================================
+// 2b. External MCP Integrations (e.g. Spent App)
+// ==============================================================================
+
+apiRouter.get('/external-mcps', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = getCtx(req);
+    const integrations = await externalMcpService.getUserIntegrations(ctx.userId);
+    res.json({
+      integrations: integrations.map((m) => ({
+        id: m._id.toString(),
+        name: m.name,
+        url: m.url,
+        status: m.status,
+        tools: m.tools,
+        toolCount: m.tools.length,
+        createdAt: m.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/external-mcps/test', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = (req as Request & { currentUser: any }).currentUser;
+    const { url, authToken } = req.body;
+    if (!url || typeof url !== 'string') {
+      throw new AppError('Server URL is required', 400, 'BAD_REQUEST');
+    }
+
+    let token = authToken?.trim();
+    if (!token && url.includes('apptiva.in') && user?.spentBearer) {
+      token = user.spentBearer;
+    }
+
+    const tools = await externalMcpService.fetchRemoteTools(url.trim(), token);
+    res.json({ success: true, count: tools.length, tools });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/external-mcps', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = getCtx(req);
+    const user = (req as Request & { currentUser: any }).currentUser;
+    const { name, url, authToken } = req.body;
+
+    if (!name || typeof name !== 'string') {
+      throw new AppError('Server Name is required', 400, 'BAD_REQUEST');
+    }
+    if (!url || typeof url !== 'string') {
+      throw new AppError('Server URL is required', 400, 'BAD_REQUEST');
+    }
+
+    let token = authToken?.trim();
+    if (!token && url.includes('apptiva.in') && user?.spentBearer) {
+      token = user.spentBearer;
+    }
+
+    const doc = await externalMcpService.addIntegration(ctx.userId, {
+      name,
+      url,
+      authToken: token,
+    });
+
+    res.status(201).json({
+      success: true,
+      integration: {
+        id: doc._id.toString(),
+        name: doc.name,
+        url: doc.url,
+        status: doc.status,
+        tools: doc.tools,
+        toolCount: doc.tools.length,
+        createdAt: doc.createdAt.toISOString(),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.delete('/external-mcps/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = getCtx(req);
+    const id = req.params['id'] as string;
+    if (!id) {
+      throw new AppError('Integration ID is required', 400, 'BAD_REQUEST');
+    }
+    const deleted = await externalMcpService.removeIntegration(ctx.userId, id);
+    res.json({ success: deleted });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// List Endpoints / Workflows for the logged-in user
+apiRouter.get(['/endpoints', '/workflows'], async (req: Request, res: Response, next: NextFunction) => {
   try {
     const ctx = getCtx(req);
     let endpoints = await Endpoint.find({ ownerId: ctx.userId }).sort({ createdAt: -1 }).lean();
@@ -303,7 +432,7 @@ const createEndpointSchema = z.object({
   slug: z.string().optional(),
 });
 
-apiRouter.post('/endpoints', async (req: Request, res: Response, next: NextFunction) => {
+apiRouter.post(['/endpoints', '/workflows'], async (req: Request, res: Response, next: NextFunction) => {
   try {
     const input = createEndpointSchema.parse(req.body);
     const ctx = getCtx(req);
@@ -335,7 +464,7 @@ apiRouter.post('/endpoints', async (req: Request, res: Response, next: NextFunct
 });
 
 // Update MCP Endpoint (toggle status, edit allowlist)
-apiRouter.patch('/endpoints/:id', async (req: Request, res: Response, next: NextFunction) => {
+apiRouter.patch(['/endpoints/:id', '/workflows/:id'], async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params['id'] as string;
     const ctx = getCtx(req);
@@ -374,7 +503,7 @@ apiRouter.patch('/endpoints/:id', async (req: Request, res: Response, next: Next
 });
 
 // Delete MCP Endpoint
-apiRouter.delete('/endpoints/:id', async (req: Request, res: Response, next: NextFunction) => {
+apiRouter.delete(['/endpoints/:id', '/workflows/:id'], async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params['id'] as string;
     const ctx = getCtx(req);
@@ -586,7 +715,7 @@ apiRouter.use((err: unknown, _req: Request, res: Response, _next: NextFunction) 
     res.status(err.statusCode).json({
       error: err.code,
       message: err.message,
-      ...( 'details' in err ? { details: (err as Record<string, unknown>)['details'] } : {} ),
+      ...('details' in err ? { details: (err as Record<string, unknown>)['details'] } : {}),
     });
     return;
   }
