@@ -10,6 +10,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { connectDatabase, disconnectDatabase, logger } from './config/index.js';
 import { handleMcpRequest, handleMcpDelete } from './mcp/transport.js';
+import { apiRouter } from './api/routes.js';
 
 // Import models to register them with Mongoose
 import './modules/items/model.js';
@@ -49,7 +50,8 @@ async function main() {
   app.post('/mcp/:slug', handleMcpRequest);
   app.delete('/mcp/:slug', handleMcpDelete);
 
-  // TODO: Mount REST API routes for portal
+  // REST API routes for web portal
+  app.use('/api', apiRouter);
 
   // 3. Start server
   const server = app.listen(PORT, HOST, () => {

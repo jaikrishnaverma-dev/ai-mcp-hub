@@ -156,25 +156,26 @@ fi
 echo -e "${GREEN}✓ Build and data preparation complete.${NC}\n"
 
 # ------------------------------------------------------------------------------
-# 5. Start Server
+# 5. Start MCP Server & Web Portal UI
 # ------------------------------------------------------------------------------
-echo -e "${BLUE}[5/5] Launching Assistant Express & MCP Server...${NC}"
+echo -e "${BLUE}[5/5] Launching Assistant MCP Server & Web Portal...${NC}"
 echo -e "${CYAN}------------------------------------------------------${NC}"
-echo -e "Health Check URL: ${BOLD}http://localhost:3000/health${NC}"
-echo -e "MCP Base URL:     ${BOLD}http://localhost:3000/mcp/:slug${NC}"
-echo -e "Press ${BOLD}Ctrl+C${NC} anytime to stop the server."
+echo -e "🌐 Web Portal (Shadcn UI):  ${BOLD}http://localhost:5173${NC}"
+echo -e "🤖 MCP Base URL:            ${BOLD}http://localhost:3000/mcp/:slug${NC}"
+echo -e "🩺 Health Check URL:        ${BOLD}http://localhost:3000/health${NC}"
+echo -e "Press ${BOLD}Ctrl+C${NC} anytime to stop both services."
 echo -e "${CYAN}------------------------------------------------------${NC}\n"
 
 # Cleanup function on Ctrl+C
 cleanup() {
-  echo -e "\n${YELLOW}🛑 Shutting down Assistant server...${NC}"
+  echo -e "\n${YELLOW}🛑 Shutting down Assistant services...${NC}"
+  jobs -p | xargs kill 2>/dev/null || true
   # Note: Docker containers remain running in the background for quick restarts.
-  # Run 'docker compose down' to stop the containers.
   echo -e "${CYAN}ℹ️  MongoDB and Redis containers are still active. To stop them run: docker compose down${NC}"
   exit 0
 }
 
 trap cleanup SIGINT SIGTERM
 
-# Execute server dev mode
-pnpm --filter @assistant/server dev
+# Execute server and portal concurrently via Turborepo
+pnpm dev

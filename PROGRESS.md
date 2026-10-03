@@ -66,7 +66,14 @@
 - ✅ Remote origin connected: `https://github.com/jaikrishnaverma-dev/ai-mcp-hub.git`
 - ✅ Initial code commit pushed to GitHub (`main`)
 - ✅ `README.md` created with complete architecture, tool table, setup instructions, and roadmap
-- ✅ `start.sh` automated launcher created (Docker check/boot, MongoDB RS & Redis check, build, auto-seed, and MCP dev server)
+**Web Portal (`apps/portal`) & Management UI:**
+- ✅ Created React + Vite + Tailwind + shadcn/ui portal conforming to official `components.json`
+- ✅ REST API routes mounted at `/api/*` communicating directly with domain services
+- ✅ **MCP Server & Endpoints Manager**: create/manage endpoints, toggle active/revoked, inspect tool allowlists, 1-click copy for Claude Desktop (`claude_desktop_config.json`) & Cursor, live MCP ping tester
+- ✅ **Users' Data Browser**: inspect process items (goals, stories, tasks, subtasks), blockers with unblocking action, decisions with rationale, and append-only audit stream
+- ✅ **Executive Daily Brief**: visual dashboard of focus tasks, due today, overdue, and bottleneck alerts
+- ✅ **User Authentication & Switcher**: multi-user support with active session switcher and instant email sign-in
+- ✅ `start.sh` updated to launch both the MCP Server (port 3000) and Web Portal (port 5173) simultaneously via Turborepo
 
 **What's remaining in Phase 1:**
 - [ ] Spin up MongoDB replica set & Redis (start Docker Compose or local mongod)
@@ -74,7 +81,6 @@
 - [ ] Vitest unit & integration tests (cycle detection, soft-delete, daily brief, MCP calls)
 - [ ] Auth / Bearer token validation on `/mcp/:slug` (token scopes ∩ endpoint allowlist)
 - [ ] Connect with Claude / AI client & verify 7-day test workflow
-- [ ] Minimal Portal UI (React + Vite + Tailwind) for visual verification
 
 ---
 
