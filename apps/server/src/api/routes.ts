@@ -249,6 +249,29 @@ apiRouter.get('/mcp-catalog', async (req: Request, res: Response, next: NextFunc
 // 2b. External MCP Integrations (e.g. Spent App)
 // ==============================================================================
 
+apiRouter.get('/external-mcps/spent-details', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = (req as Request & { currentUser?: any }).currentUser;
+    const origin = req.headers.origin || (req.headers.host ? `https://${req.headers.host}` : 'https://mcphub.apptiva.in');
+    const clientId = user?.externalId ? `spent_${user.externalId}` : 'spent_user_client';
+    const clientSecret = user?.spentBearer || '';
+    const serverUrl = 'https://apptiva.in/backend/mcp/server.php';
+    const verifyUrl = `https://apptiva.in/login?return_url=${encodeURIComponent(`${origin}/tools?verified=spent`)}`;
+
+    res.json({
+      name: 'Spent App',
+      clientId,
+      clientSecret,
+      serverUrl,
+      verifyUrl,
+      isAuthenticated: Boolean(user?.spentBearer),
+      userEmail: user?.email || '',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 apiRouter.get('/external-mcps', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const ctx = getCtx(req);

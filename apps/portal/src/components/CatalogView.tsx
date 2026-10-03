@@ -99,23 +99,41 @@ export function CatalogView({
     loadData();
   }, [currentUser]);
 
-  const handleOpenAddExternal = () => {
-    if (!currentUser) {
-      onRequireAuth('Sign in to connect external tools');
-      return;
-    }
+  const [spentDetails, setSpentDetails] = useState<{
+    name: string;
+    clientId: string;
+    clientSecret: string;
+    serverUrl: string;
+    verifyUrl: string;
+    isAuthenticated: boolean;
+    userEmail: string;
+  } | null>(null);
+
+  const handleOpenAddExternal = async () => {
     setExtName('Spent App');
     setExtUrl('https://apptiva.in/backend/mcp/server.php');
     setExtToken('');
     setExtError(null);
     setExtTestResult(null);
     setAddExternalModalOpen(true);
+
+    try {
+      const details = await api.getSpentAppDetails();
+      setSpentDetails(details);
+      if (details.name) setExtName(details.name);
+      if (details.serverUrl) setExtUrl(details.serverUrl);
+      if (details.clientSecret) setExtToken(details.clientSecret);
+    } catch {
+      // ignore
+    }
   };
 
   const handleFillSpentPreset = () => {
     setExtName('Spent App');
     setExtUrl('https://apptiva.in/backend/mcp/server.php');
-    setExtToken('');
+    if (spentDetails?.clientSecret) {
+      setExtToken(spentDetails.clientSecret);
+    }
     setExtError(null);
   };
 
@@ -602,7 +620,7 @@ export function CatalogView({
           )}
 
           {/* Quick Preset: Spent App */}
-          <div className="p-3.5 rounded-xl border border-purple-200 dark:border-purple-900/60 bg-purple-50/60 dark:bg-purple-950/30 space-y-2">
+          <div className="p-3.5 rounded-xl border border-purple-200 dark:border-purple-900/60 bg-purple-50/60 dark:bg-purple-950/30 space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-purple-600 text-white font-bold text-xs">
@@ -617,12 +635,45 @@ export function CatalogView({
                 onClick={handleFillSpentPreset}
                 className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 hover:underline"
               >
-                Reset to Preset
+                Reset Details
               </button>
             </div>
+            
             <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
-              Pre-configures <code className="font-mono text-[10px]">https://apptiva.in/backend/mcp/server.php</code>. Uses your logged-in Spent session token automatically!
+              {currentUser ? (
+                <>
+                  Logged in as <strong>{currentUser.email}</strong>. Client ID: <code className="font-mono text-[10px]">{spentDetails?.clientId || 'spent_app'}</code>. Your Spent App token is active and ready.
+                </>
+              ) : (
+                <>
+                  Connect your Spent App account (<code className="font-mono text-[10px]">https://apptiva.in/backend/mcp/server.php</code>).
+                </>
+              )}
             </p>
+
+            <div className="flex items-center gap-2 pt-1 flex-wrap">
+              <button
+                type="button"
+                onClick={async () => {
+                  handleFillSpentPreset();
+                  await handleSaveExternal(new Event('submit') as unknown as React.FormEvent);
+                }}
+                disabled={extSaving}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              >
+                <Plug className="h-3.5 w-3.5" />
+                <span>{extSaving ? 'Connecting...' : 'Connect Spent App (1-Click)'}</span>
+              </button>
+              
+              <a
+                href={spentDetails?.verifyUrl || 'https://apptiva.in/login'}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] font-medium text-purple-700 dark:text-purple-300 hover:underline ml-auto"
+              >
+                Open Spent App ↗
+              </a>
+            </div>
           </div>
 
           <form onSubmit={handleSaveExternal} className="space-y-4 pt-1">

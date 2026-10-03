@@ -378,6 +378,16 @@ export const api = {
 
   // External MCP Integrations (e.g. Spent App)
   getExternalMcps: () => fetchJson<{ integrations: ExternalMcpIntegration[] }>('/api/external-mcps'),
+  getSpentAppDetails: () =>
+    fetchJson<{
+      name: string;
+      clientId: string;
+      clientSecret: string;
+      serverUrl: string;
+      verifyUrl: string;
+      isAuthenticated: boolean;
+      userEmail: string;
+    }>('/api/external-mcps/spent-details'),
   addExternalMcp: (data: { name: string; url: string; authToken?: string }) =>
     fetchJson<{ success: boolean; integration: ExternalMcpIntegration }>('/api/external-mcps', {
       method: 'POST',
