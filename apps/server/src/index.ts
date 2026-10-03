@@ -27,6 +27,8 @@ import './modules/decisions/model.js';
 import './modules/blockers/model.js';
 import './modules/endpoints/model.js';
 import './modules/auth/model.js';
+import './modules/auth/oauth-model.js';
+import { oauthRouter } from './modules/auth/oauth-routes.js';
 
 const PORT = parseInt(process.env['PORT'] || '3000', 10);
 const HOST = process.env['HOST'] || '0.0.0.0';
@@ -43,6 +45,7 @@ async function main() {
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors());
   app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true }));
 
   // Health check
   app.get('/health', (_req, res) => {
@@ -52,6 +55,9 @@ async function main() {
       version: process.env['npm_package_version'] || '0.1.0',
     });
   });
+
+  // OAuth 2.0 / 2.1 routes (token exchange, consent discovery, clients)
+  app.use(oauthRouter);
 
   // MCP endpoints — scoped by endpoint slug
   app.post('/mcp/:slug', handleMcpRequest);
@@ -75,8 +81,8 @@ async function main() {
   if (activePortalDist) {
     logger.info({ path: activePortalDist }, 'Serving static portal frontend');
     app.use(express.static(activePortalDist));
-    app.get('*', (req, res, next) => {
-      if (req.path.startsWith('/api') || req.path.startsWith('/mcp') || req.path.startsWith('/health')) {
+    app.use((req, res, next) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/mcp') || req.path.startsWith('/health') || req.path.startsWith('/oauth')) {
         return next();
       }
       res.sendFile(path.join(activePortalDist, 'index.html'));

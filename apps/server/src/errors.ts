@@ -17,6 +17,13 @@ export class AppError extends Error {
   }
 }
 
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Authentication required') {
+    super(message, 401, 'UNAUTHORIZED');
+    this.name = 'UnauthorizedError';
+  }
+}
+
 export class NotFoundError extends AppError {
   constructor(entity: string, id?: string) {
     const msg = id ? `${entity} '${id}' not found` : `${entity} not found`;

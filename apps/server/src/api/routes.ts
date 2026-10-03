@@ -27,6 +27,7 @@ import { decisionsService } from '../modules/decisions/service.js';
 import { blockersService } from '../modules/blockers/service.js';
 import { plannerService } from '../modules/planner/service.js';
 import { toolRegistry } from '../mcp/registry.js';
+import { logger } from '../config/index.js';
 import { Decision } from '../modules/decisions/model.js';
 import { Blocker } from '../modules/blockers/model.js';
 import { Endpoint } from '../modules/endpoints/model.js';
@@ -38,7 +39,7 @@ export const apiRouter: Router = Router();
 
 /**
  * Middleware: build user ServiceContext.
- * Accepts x-user-id header to switch users, otherwise falls back to first user in DB.
+ * Accepts x-user-id header to switch users and strictly enforce tenant/user isolation.
  */
 async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -49,23 +50,10 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
       user = await User.findById(requestedUserId);
     }
 
-    if (requestedUserId === 'none') {
-      // Explicitly logged out session
+    if (!user) {
       (req as Request & { ctx?: ServiceContext; currentUser?: any }).currentUser = null;
       next();
       return;
-    }
-
-    if (!user) {
-      user = await User.findOne({});
-    }
-    if (!user) {
-      user = await User.create({
-        externalId: 'demo-user-001',
-        email: 'jai@example.com',
-        name: 'Jai',
-        timezone: 'Asia/Kolkata',
-      });
     }
 
     const userId = user._id.toString();
@@ -86,13 +74,13 @@ apiRouter.use(requireAuth);
 function getCtx(req: Request): ServiceContext {
   const ctx = (req as Request & { ctx?: ServiceContext }).ctx;
   if (!ctx) {
-    throw new AppError('Authentication required. Please sign in.', 401, 'UNAUTHORIZED');
+    throw new AppError('Authentication required. Please sign in with your Spent App account.', 401, 'UNAUTHORIZED');
   }
   return ctx;
 }
 
 // ==============================================================================
-// 1. Auth & Users Management
+// 1. Auth & Users Management (Centralized via Spent App)
 // ==============================================================================
 
 apiRouter.get('/auth/me', (req: Request, res: Response) => {
@@ -132,20 +120,67 @@ apiRouter.get('/auth/users', async (_req: Request, res: Response, next: NextFunc
 
 apiRouter.post('/auth/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email, name } = req.body;
-    if (!email) {
-      res.status(400).json({ error: 'Email is required' });
+    const { email, password } = req.body;
+    if (!email || !password) {
+      res.status(400).json({ error: 'Email and password are required' });
       return;
     }
 
-    let user = await User.findOne({ email: email.toLowerCase().trim() });
+    // Authenticate with centralized Spent App API on apptiva.in
+    const spentApiUrl = process.env['SPENT_API_URL'] || 'https://apptiva.in/backend/api/login.php';
+    let spentRes: {
+      success: boolean;
+      message?: string;
+      user?: {
+        id: number | string;
+        email: string;
+        name?: string;
+        bearer?: string;
+      };
+    };
+
+    try {
+      const response = await fetch(spentApiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      spentRes = (await response.json()) as typeof spentRes;
+    } catch (fetchErr) {
+      logger.error({ err: fetchErr }, 'Failed to reach Spent App authentication API');
+      res.status(502).json({ error: 'Unable to connect to Spent App authentication server' });
+      return;
+    }
+
+    if (!spentRes || !spentRes.success || !spentRes.user) {
+      res.status(401).json({ error: spentRes?.message || 'Invalid email or password' });
+      return;
+    }
+
+    const spentUser = spentRes.user;
+    const spentUserIdStr = String(spentUser.id);
+
+    // Upsert shadow user record in MongoDB linked strictly to Spent user ID
+    let user = await User.findOne({
+      $or: [
+        { externalId: spentUserIdStr },
+        { email: spentUser.email.toLowerCase().trim() },
+      ],
+    });
+
     if (!user) {
       user = await User.create({
-        externalId: `user-${Date.now()}`,
-        email: email.toLowerCase().trim(),
-        name: name || email.split('@')[0],
+        externalId: spentUserIdStr,
+        email: spentUser.email.toLowerCase().trim(),
+        name: spentUser.name || spentUser.email.split('@')[0],
+        spentBearer: spentUser.bearer,
         timezone: 'Asia/Kolkata',
       });
+    } else {
+      user.externalId = spentUserIdStr;
+      if (spentUser.name) user.name = spentUser.name;
+      if (spentUser.bearer) user.spentBearer = spentUser.bearer;
+      await user.save();
     }
 
     res.json({
@@ -154,6 +189,8 @@ apiRouter.post('/auth/login', async (req: Request, res: Response, next: NextFunc
         name: user.name,
         email: user.email,
         timezone: user.timezone,
+        externalId: user.externalId,
+        createdAt: user.createdAt.toISOString(),
       },
     });
   } catch (err) {

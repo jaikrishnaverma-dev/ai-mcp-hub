@@ -11,9 +11,10 @@ import { DEFAULT_TIMEZONE } from '@assistant/shared';
 
 export interface UserDocument extends Document {
   _id: Types.ObjectId;
-  externalId: string; // Auth provider ID (Clerk user ID)
+  externalId: string; // Centralized Spent App User ID (string)
   email: string;
   name: string;
+  spentBearer?: string; // Stored securely to proxy Spent App MCP tools and verify session
   timezone: string;
   createdAt: Date;
   updatedAt: Date;
@@ -40,6 +41,9 @@ const userSchema = new Schema<UserDocument>(
       required: true,
       maxlength: 200,
       trim: true,
+    },
+    spentBearer: {
+      type: String,
     },
     timezone: {
       type: String,

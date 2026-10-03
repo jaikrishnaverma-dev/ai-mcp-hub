@@ -20,6 +20,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Request, Response } from 'express';
 import { Endpoint } from '../modules/endpoints/model.js';
+import { oauthService } from '../modules/auth/oauth-service.js';
 import { toolRegistry } from './registry.js';
 import { registerP1Tools } from './tools.js';
 import { createModuleLogger } from '../config/index.js';
@@ -36,8 +37,9 @@ registerP1Tools();
  *
  * Flow:
  * 1. Resolve endpoint by slug
- * 2. Create MCP server scoped to this endpoint's allowlist
- * 3. Process the request through MCP protocol
+ * 2. Authenticate: Bearer Token or endpoint owner
+ * 3. Create MCP server scoped to this endpoint's allowlist
+ * 4. Process the request through MCP protocol
  */
 export async function handleMcpRequest(req: Request, res: Response): Promise<void> {
   const slug = req.params['slug'];
@@ -54,13 +56,27 @@ export async function handleMcpRequest(req: Request, res: Response): Promise<voi
     return;
   }
 
-  // 2. Build service context
-  // TODO: In production, extract userId from OAuth token
-  // For now, use the endpoint owner as the user (dev mode)
+  // 2. Authenticate: Bearer token or fallback to endpoint owner
+  let authenticatedUserId = endpoint.ownerId.toString();
+  let effectiveScopes = endpoint.scopes;
+
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const tokenStr = authHeader.slice(7).trim();
+    const tokenInfo = await oauthService.verifyBearerToken(tokenStr);
+    if (!tokenInfo) {
+      res.status(401).json({ error: 'Invalid or expired Bearer token' });
+      return;
+    }
+    authenticatedUserId = tokenInfo.user.id;
+    // Effective permission = token scopes ∩ endpoint allowlist
+    effectiveScopes = endpoint.scopes.filter((s) => tokenInfo.scopes.includes(s));
+  }
+
   const ctx: ServiceContext = {
-    userId: endpoint.ownerId.toString(),
+    userId: authenticatedUserId,
     actorType: 'ai',
-    endpointScopes: endpoint.scopes,
+    endpointScopes: effectiveScopes,
   };
 
   // 3. Create a per-request MCP server using low-level Server class

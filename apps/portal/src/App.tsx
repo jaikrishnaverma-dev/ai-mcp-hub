@@ -6,6 +6,7 @@ import { DailyBriefView } from './components/DailyBriefView.js';
 import { EndpointsView } from './components/EndpointsView.js';
 import { CatalogView } from './components/CatalogView.js';
 import { DataBrowserView } from './components/DataBrowserView.js';
+import { OAuthConsentView } from './components/OAuthConsentView.js';
 import { LoginModal } from './components/LoginModal.js';
 
 import {
@@ -37,6 +38,7 @@ export function App() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const isOAuthRoute = location.pathname.startsWith('/oauth/authorize');
   const activeTab = getActiveTabFromPath(location.pathname);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(getActiveUser());
   const [loginModalOpen, setLoginModalOpen] = useState(false);
@@ -88,19 +90,21 @@ export function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f4f4f5] dark:bg-background text-foreground">
-      {/* Top Navbar */}
-      <Navbar
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        currentUser={currentUser}
-        onOpenLogin={handleOpenLogin}
-        onLogout={handleLogout}
-        darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode(!darkMode)}
-      />
+      {/* Top Navbar (hidden on standalone OAuth consent screen) */}
+      {!isOAuthRoute && (
+        <Navbar
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          currentUser={currentUser}
+          onOpenLogin={handleOpenLogin}
+          onLogout={handleLogout}
+          darkMode={darkMode}
+          onToggleDarkMode={() => setDarkMode(!darkMode)}
+        />
+      )}
 
       {/* Main Content Area — React Router Routes */}
-      <main className="flex-1 pb-24 sm:pb-12">
+      <main className={`flex-1 ${isOAuthRoute ? 'p-0' : 'pb-24 sm:pb-12'}`}>
         <Routes>
           <Route path="/" element={<Navigate to="/tools" replace />} />
           <Route
@@ -144,15 +148,26 @@ export function App() {
             }
           />
           <Route path="/data" element={<Navigate to="/explorer" replace />} />
+          <Route
+            path="/oauth/authorize"
+            element={
+              <OAuthConsentView
+                currentUser={currentUser}
+                onRequireAuth={handleOpenLogin}
+              />
+            }
+          />
           <Route path="*" element={<Navigate to="/tools" replace />} />
         </Routes>
       </main>
 
-      {/* Mobile Fixed Bottom Navigation Bar (< 768px) */}
-      <MobileBottomNav
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-      />
+      {/* Mobile Fixed Bottom Navigation Bar (< 768px, hidden on OAuth screen) */}
+      {!isOAuthRoute && (
+        <MobileBottomNav
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+        />
+      )}
 
       {/* Auth Gate Login Modal */}
       <LoginModal
@@ -166,3 +181,4 @@ export function App() {
 }
 
 export default App;
+

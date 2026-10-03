@@ -4,6 +4,7 @@ import {
   type Workflow,
   type McpTool,
   type UserProfile,
+  type OAuthClientItem,
 } from '../api/client.js';
 import {
   Plus,
@@ -15,6 +16,10 @@ import {
   Edit,
   RefreshCw,
   AlertCircle,
+  Bot,
+  Sparkles,
+  Key,
+  ShieldCheck,
 } from 'lucide-react';
 import { Button } from './ui/button.js';
 import { Input } from './ui/input.js';
@@ -56,6 +61,19 @@ export function EndpointsView({ currentUser, onRequireAuth }: EndpointsViewProps
     tools: string[];
     raw: unknown;
   } | null>(null);
+
+  // OAuth Connect Modal state
+  const [oauthModalOpen, setOauthModalOpen] = useState(false);
+  const [oauthClients, setOauthClients] = useState<OAuthClientItem[]>([]);
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const [oauthSubTab, setOauthSubTab] = useState<'create' | 'list'>('create');
+  const [presetType, setPresetType] = useState<'chatgpt' | 'claude' | 'custom'>('chatgpt');
+  const [newClientName, setNewClientName] = useState('ChatGPT Custom Action');
+  const [newRedirectUri, setNewRedirectUri] = useState('https://chatgpt.com/aip/g-assistant/oauth/callback');
+  const [selectedEndpointId, setSelectedEndpointId] = useState('');
+  const [createdClient, setCreatedClient] = useState<OAuthClientItem | null>(null);
+  const [copiedOAuthKey, setCopiedOAuthKey] = useState<string | null>(null);
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   const loadData = async () => {
     if (!currentUser) return;
@@ -179,6 +197,90 @@ export function EndpointsView({ currentUser, onRequireAuth }: EndpointsViewProps
     }
   };
 
+  const handleOpenOAuthModal = async () => {
+    if (!currentUser) {
+      onRequireAuth('Sign in to connect AI clients');
+      return;
+    }
+    setCreatedClient(null);
+    setOauthError(null);
+    setOauthModalOpen(true);
+    if (endpoints.length > 0 && !selectedEndpointId) {
+      setSelectedEndpointId(endpoints[0]?.id || '');
+    }
+    loadOAuthClients();
+  };
+
+  const loadOAuthClients = async () => {
+    try {
+      setOauthLoading(true);
+      const res = await api.getOAuthClients();
+      setOauthClients(res.clients || []);
+    } catch (err) {
+      console.error('Failed to load OAuth clients:', err);
+    } finally {
+      setOauthLoading(false);
+    }
+  };
+
+  const handleSelectPreset = (type: 'chatgpt' | 'claude' | 'custom') => {
+    setPresetType(type);
+    setCreatedClient(null);
+    if (type === 'chatgpt') {
+      setNewClientName('ChatGPT Custom Action');
+      setNewRedirectUri('https://chatgpt.com/aip/g-assistant/oauth/callback');
+    } else if (type === 'claude') {
+      setNewClientName('Claude AI Web & Desktop');
+      setNewRedirectUri('https://claude.ai/api/mcp/oauth/callback');
+    } else {
+      setNewClientName('Custom AI Client');
+      setNewRedirectUri('');
+    }
+  };
+
+  const handleCreateOAuthClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClientName.trim()) {
+      setOauthError('Client name is required');
+      return;
+    }
+    try {
+      setOauthLoading(true);
+      setOauthError(null);
+      const res = await api.createOAuthClient({
+        clientName: newClientName.trim(),
+        redirectUris: newRedirectUri.trim() ? [newRedirectUri.trim()] : [],
+        endpointId: selectedEndpointId || undefined,
+        scopes: ['read', 'write'],
+      });
+      setCreatedClient(res.client);
+      loadOAuthClients();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate OAuth credentials';
+      setOauthError(msg);
+    } finally {
+      setOauthLoading(false);
+    }
+  };
+
+  const handleRevokeOAuthClient = async (clientId: string) => {
+    try {
+      await api.deleteOAuthClient(clientId);
+      loadOAuthClients();
+      if (createdClient && createdClient.clientId === clientId) {
+        setCreatedClient(null);
+      }
+    } catch (err) {
+      console.error('Failed to revoke client:', err);
+    }
+  };
+
+  const handleCopyOAuth = (key: string, value: string) => {
+    navigator.clipboard.writeText(value);
+    setCopiedOAuthKey(key);
+    setTimeout(() => setCopiedOAuthKey(null), 2000);
+  };
+
   if (!currentUser) {
     return (
       <div className="container max-w-4xl mx-auto py-16 px-4 text-center space-y-4">
@@ -207,7 +309,7 @@ export function EndpointsView({ currentUser, onRequireAuth }: EndpointsViewProps
     <div className="container max-w-4xl mx-auto py-8 px-4 sm:px-6 space-y-6">
       {/* Header */}
       <div className="space-y-3 pb-4 border-b border-zinc-200/80 dark:border-zinc-800">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-100">
               MCP Server &amp; Endpoints
@@ -217,13 +319,24 @@ export function EndpointsView({ currentUser, onRequireAuth }: EndpointsViewProps
             </p>
           </div>
 
-          <button
-            onClick={handleOpenCreate}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:text-zinc-900 px-4 py-2 text-xs font-semibold shadow-xs transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Create Endpoint</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleOpenOAuthModal}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200 dark:border-purple-800/60 bg-purple-50 hover:bg-purple-100/70 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 px-3 sm:px-3.5 py-2 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+            >
+              <Bot className="h-4 w-4" />
+              <span className="hidden sm:inline">Connect Claude &amp; ChatGPT</span>
+              <span className="sm:hidden">Connect AI</span>
+            </button>
+
+            <button
+              onClick={handleOpenCreate}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:text-zinc-900 px-3.5 sm:px-4 py-2 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Create Endpoint</span>
+            </button>
+          </div>
         </div>
 
         <div>
@@ -513,6 +626,335 @@ export function EndpointsView({ currentUser, onRequireAuth }: EndpointsViewProps
             </div>
           </form>
 
+        </DialogContent>
+      </Dialog>
+
+      {/* OAuth Connect Dialog for Claude & ChatGPT */}
+      <Dialog open={oauthModalOpen} onOpenChange={setOauthModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-6 shadow-xl">
+          <DialogHeader className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">
+                <Bot className="h-4 w-4" />
+              </div>
+              <DialogTitle className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+                Connect AI Client (OAuth 2.0)
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400">
+              Generate OAuth credentials for Claude AI, ChatGPT Actions, or custom agents. When you connect, you will be redirected to an approval screen to grant permissions.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Sub tabs: Create vs List */}
+          <div className="flex border-b border-zinc-200 dark:border-zinc-800 gap-4 pt-2">
+            <button
+              type="button"
+              onClick={() => setOauthSubTab('create')}
+              className={`pb-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px cursor-pointer ${
+                oauthSubTab === 'create'
+                  ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+              }`}
+            >
+              Configure New Client
+            </button>
+            <button
+              type="button"
+              onClick={() => setOauthSubTab('list')}
+              className={`pb-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px cursor-pointer flex items-center gap-1.5 ${
+                oauthSubTab === 'list'
+                  ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+              }`}
+            >
+              <span>Active Integrations</span>
+              {oauthClients.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-[10px] text-zinc-600 dark:text-zinc-400">
+                  {oauthClients.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {oauthSubTab === 'create' ? (
+            <div className="space-y-5 pt-3">
+              {/* Presets */}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                  Choose Platform Preset
+                </Label>
+                <div className="grid grid-cols-3 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectPreset('chatgpt')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      presetType === 'chatgpt'
+                        ? 'border-purple-500 bg-purple-50/60 dark:bg-purple-950/30 text-purple-950 dark:text-purple-200 ring-1 ring-purple-500'
+                        : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/50 text-zinc-700 dark:text-zinc-300'
+                    }`}
+                  >
+                    <div className="font-semibold text-xs flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                      ChatGPT
+                    </div>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2">
+                      Custom GPT Action with OAuth redirect
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSelectPreset('claude')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      presetType === 'claude'
+                        ? 'border-purple-500 bg-purple-50/60 dark:bg-purple-950/30 text-purple-950 dark:text-purple-200 ring-1 ring-purple-500'
+                        : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/50 text-zinc-700 dark:text-zinc-300'
+                    }`}
+                  >
+                    <div className="font-semibold text-xs flex items-center gap-1.5">
+                      <Bot className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                      Claude AI
+                    </div>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2">
+                      Claude Web / Desktop MCP OAuth
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSelectPreset('custom')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      presetType === 'custom'
+                        ? 'border-purple-500 bg-purple-50/60 dark:bg-purple-950/30 text-purple-950 dark:text-purple-200 ring-1 ring-purple-500'
+                        : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/50 text-zinc-700 dark:text-zinc-300'
+                    }`}
+                  >
+                    <div className="font-semibold text-xs flex items-center gap-1.5">
+                      <Key className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                      Custom
+                    </div>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2">
+                      Custom agent or web client
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleCreateOAuthClient} className="space-y-3.5">
+                {oauthError && (
+                  <div className="flex items-center gap-2 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900/60 p-3 text-xs text-red-700 dark:text-red-300">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{oauthError}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="oauth-client-name" className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                      Client App Name
+                    </Label>
+                    <Input
+                      id="oauth-client-name"
+                      value={newClientName}
+                      onChange={(e) => setNewClientName(e.target.value)}
+                      placeholder="e.g., Claude Assistant"
+                      className="rounded-xl text-xs h-9 bg-zinc-50/50 dark:bg-zinc-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="oauth-endpoint" className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                      Bind to MCP Endpoint
+                    </Label>
+                    <select
+                      id="oauth-endpoint"
+                      value={selectedEndpointId}
+                      onChange={(e) => setSelectedEndpointId(e.target.value)}
+                      className="w-full rounded-xl text-xs h-9 px-3 border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-hidden"
+                    >
+                      <option value="">All User Workflows &amp; Endpoints</option>
+                      {endpoints.map((ep) => (
+                        <option key={ep.id} value={ep.id}>
+                          {ep.name} (/mcp/{ep.slug})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="oauth-redirect-uri" className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    Client Callback / Redirect URI
+                  </Label>
+                  <Input
+                    id="oauth-redirect-uri"
+                    value={newRedirectUri}
+                    onChange={(e) => setNewRedirectUri(e.target.value)}
+                    placeholder="https://chatgpt.com/aip/g-assistant/oauth/callback"
+                    className="rounded-xl text-xs h-9 font-mono bg-zinc-50/50 dark:bg-zinc-900"
+                  />
+                  <p className="text-[11px] text-zinc-500">
+                    Where the authorization code will be sent after you click Approve on the consent screen.
+                  </p>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={oauthLoading}
+                  className="w-full h-9 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs shadow-xs"
+                >
+                  {oauthLoading ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Generate Credentials
+                </Button>
+              </form>
+
+              {/* Created Client Credentials Box */}
+              {createdClient && (
+                <div className="mt-4 rounded-xl border border-purple-200 dark:border-purple-800/60 bg-purple-50/40 dark:bg-purple-950/20 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                      <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      Client Created Successfully!
+                    </span>
+                    <span className="text-[11px] text-purple-700 dark:text-purple-400 font-mono">
+                      Save client secret now
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-300">
+                    Copy these credentials into your AI client (ChatGPT Custom GPT Action or Claude OAuth settings):
+                  </p>
+
+                  <div className="space-y-2 text-xs font-mono">
+                    <div className="flex items-center justify-between bg-white dark:bg-zinc-900 p-2 rounded-lg border border-purple-100 dark:border-purple-900/40">
+                      <div className="min-w-0 pr-2">
+                        <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold block">Client ID</span>
+                        <span className="text-zinc-800 dark:text-zinc-200 truncate block">{createdClient.clientId}</span>
+                      </div>
+                      <button
+                        onClick={() => handleCopyOAuth('cid', createdClient.clientId)}
+                        className="p-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
+                        title="Copy Client ID"
+                      >
+                        {copiedOAuthKey === 'cid' ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+
+                    {createdClient.clientSecret && (
+                      <div className="flex items-center justify-between bg-white dark:bg-zinc-900 p-2 rounded-lg border border-purple-100 dark:border-purple-900/40">
+                        <div className="min-w-0 pr-2">
+                          <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold block">Client Secret</span>
+                          <span className="text-emerald-700 dark:text-emerald-400 truncate block font-bold">{createdClient.clientSecret}</span>
+                        </div>
+                        <button
+                          onClick={() => handleCopyOAuth('secret', createdClient.clientSecret || '')}
+                          className="p-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
+                          title="Copy Secret"
+                        >
+                          {copiedOAuthKey === 'secret' ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between bg-white dark:bg-zinc-900 p-2 rounded-lg border border-purple-100 dark:border-purple-900/40">
+                      <div className="min-w-0 pr-2">
+                        <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold block">Authorization URL</span>
+                        <span className="text-zinc-800 dark:text-zinc-200 truncate block">{`${window.location.origin}/oauth/authorize`}</span>
+                      </div>
+                      <button
+                        onClick={() => handleCopyOAuth('auth_url', `${window.location.origin}/oauth/authorize`)}
+                        className="p-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
+                        title="Copy Authorization URL"
+                      >
+                        {copiedOAuthKey === 'auth_url' ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-white dark:bg-zinc-900 p-2 rounded-lg border border-purple-100 dark:border-purple-900/40">
+                      <div className="min-w-0 pr-2">
+                        <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold block">Token URL</span>
+                        <span className="text-zinc-800 dark:text-zinc-200 truncate block">{`${window.location.origin}/oauth/token`}</span>
+                      </div>
+                      <button
+                        onClick={() => handleCopyOAuth('token_url', `${window.location.origin}/oauth/token`)}
+                        className="p-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
+                        title="Copy Token URL"
+                      >
+                        {copiedOAuthKey === 'token_url' ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-white dark:bg-zinc-900 p-2 rounded-lg border border-purple-100 dark:border-purple-900/40">
+                      <div className="min-w-0 pr-2">
+                        <span className="text-[10px] text-zinc-500 uppercase font-sans font-bold block">Scope</span>
+                        <span className="text-zinc-800 dark:text-zinc-200 truncate block">read write</span>
+                      </div>
+                      <button
+                        onClick={() => handleCopyOAuth('scope', 'read write')}
+                        className="p-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
+                        title="Copy Scope"
+                      >
+                        {copiedOAuthKey === 'scope' ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Active Clients List */
+            <div className="space-y-3 pt-3">
+              {oauthLoading ? (
+                <div className="py-8 text-center text-xs text-zinc-500 flex items-center justify-center gap-2">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Loading clients...
+                </div>
+              ) : oauthClients.length === 0 ? (
+                <div className="py-8 text-center text-xs text-zinc-500">
+                  No OAuth clients generated yet. Switch to &quot;Configure New Client&quot; to connect Claude or ChatGPT.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {oauthClients.map((c) => (
+                    <div
+                      key={c.clientId}
+                      className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                          {c.clientName}
+                        </div>
+                        <div className="font-mono text-[11px] text-zinc-500 truncate">
+                          ID: {c.clientId}
+                        </div>
+                        {c.redirectUris && c.redirectUris.length > 0 && (
+                          <div className="font-mono text-[10px] text-zinc-400 truncate">
+                            Redirect: {c.redirectUris.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRevokeOAuthClient(c.clientId)}
+                        className="h-8 px-2.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        Revoke
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

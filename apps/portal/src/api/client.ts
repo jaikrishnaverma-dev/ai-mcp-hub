@@ -295,8 +295,8 @@ export function addStoredComment(targetId: string, content: string, user: UserPr
 // ─── API methods ──────────────────────────────────────────────────────────────
 
 export const api = {
-  // Auth
-  login: (data: { email: string; name?: string }) =>
+  // Auth (Centralized via Spent App)
+  login: (data: { email: string; password: string; name?: string }) =>
     fetchJson<{ user: UserProfile }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -351,6 +351,11 @@ export const api = {
     fetchJson<{ deleted: boolean }>(`/api/endpoints/${id}`, { method: 'DELETE' }),
   deleteEndpoint: (id: string) =>
     fetchJson<{ deleted: boolean }>(`/api/endpoints/${id}`, { method: 'DELETE' }),
+  pingWorkflow: (slug: string) =>
+    fetchJson<unknown>(`/mcp/${slug}`, {
+      method: 'POST',
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+    }),
 
   // Dashboard & Process Data
   getDailyBrief: () => fetchJson<DailyBriefResponse>('/api/daily-brief'),
@@ -397,19 +402,65 @@ export const api = {
     }),
   getActivity: () => fetchJson<{ activities: ActivityItem[] }>('/api/activity'),
 
-  // MCP ping (Streamable HTTP test)
-  pingWorkflow: async (slug: string): Promise<Record<string, unknown>> => {
-    const res = await fetch(`/mcp/${slug}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json, text/event-stream',
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+  // OAuth API methods
+  getOAuthClientInfo: (params: { clientId: string; redirectUri: string; state?: string; scope?: string }) => {
+    const qs = new URLSearchParams({
+      client_id: params.clientId,
+      redirect_uri: params.redirectUri,
+      ...(params.state ? { state: params.state } : {}),
+      ...(params.scope ? { scope: params.scope } : {}),
     });
-    const text = await res.text();
-    const sseMatch = text.match(/^data:\s*(.+)$/m);
-    if (sseMatch && sseMatch[1]) return JSON.parse(sseMatch[1]) as Record<string, unknown>;
-    return JSON.parse(text) as Record<string, unknown>;
+    return fetchJson<OAuthClientInfoResponse>(`/api/oauth/client-info?${qs}`);
   },
+  approveOAuth: (data: {
+    clientId: string;
+    redirectUri: string;
+    endpointId?: string;
+    scopes?: string[];
+    state?: string;
+    codeChallenge?: string;
+    codeChallengeMethod?: string;
+  }) =>
+    fetchJson<{ success: boolean; code: string; redirectUrl: string }>('/api/oauth/approve', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getOAuthClients: () => fetchJson<{ clients: OAuthClientItem[] }>('/api/oauth-clients'),
+  createOAuthClient: (data: { clientName: string; redirectUris?: string[]; endpointId?: string; scopes?: string[] }) =>
+    fetchJson<{ success: boolean; client: OAuthClientItem }>('/api/oauth-clients', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  deleteOAuthClient: (clientId: string) =>
+    fetchJson<{ success: boolean }>(`/api/oauth-clients/${clientId}`, { method: 'DELETE' }),
 };
+
+export interface OAuthClientItem {
+  id: string;
+  clientId: string;
+  clientSecret?: string;
+  clientName: string;
+  redirectUris: string[];
+  endpointId: string | null;
+  scopes: string[];
+  createdAt: string;
+}
+
+export interface OAuthClientInfoResponse {
+  success: boolean;
+  client: {
+    id: string;
+    clientId: string;
+    clientName: string;
+    scopes: string[];
+    endpointId: string | null;
+  };
+  endpoints: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    scopes: string[];
+    toolCount: number;
+  }>;
+}
+
