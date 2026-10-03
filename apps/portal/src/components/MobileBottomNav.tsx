@@ -3,6 +3,7 @@ import {
   Server,
   Sparkles,
   Database,
+  Settings,
 } from 'lucide-react';
 import type { NavTab } from './Navbar.js';
 
@@ -17,6 +18,7 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
     { id: 'endpoints' as const, label: 'Endpoints', icon: Server },
     { id: 'marketplace' as const, label: 'Tools', icon: Sparkles },
     { id: 'data' as const, label: 'Explorer', icon: Database },
+    { id: 'settings' as const, label: 'Settings', icon: Settings },
   ];
 
   return (
@@ -24,7 +26,7 @@ export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps
       aria-label="Mobile Bottom Navigation"
       className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-t border-zinc-200/80 dark:border-zinc-800 px-3 py-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-xl"
     >
-      <div className="grid grid-cols-4 items-center gap-1 max-w-md mx-auto">
+      <div className="grid grid-cols-5 items-center gap-1 max-w-md mx-auto">
         {items.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;

@@ -100,6 +100,10 @@ export function Navbar({
                   <Database className="mr-2 h-3.5 w-3.5" />
                   <span>Users&apos; Data Explorer</span>
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onTabChange('settings')} className="text-xs cursor-pointer">
+                  <Settings className="mr-2 h-3.5 w-3.5" />
+                  <span>Settings &amp; Connect AI</span>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => {
