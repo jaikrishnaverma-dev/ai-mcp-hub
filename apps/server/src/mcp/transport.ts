@@ -85,7 +85,28 @@ export async function handleMcpRequest(req: Request, res: Response): Promise<voi
   // Load user's connected external MCP servers (e.g. Spent App)
   const externalMcps = await externalMcpService.getUserIntegrations(authenticatedUserId);
   const externalTools = externalMcps.flatMap((m) =>
-    m.tools.map((t) => ({ ...t, mcpUrl: m.url, authToken: m.authToken }))
+    (m.tools || [])
+      .map((t) => {
+        const raw = (t as any).toObject ? (t as any).toObject() : t;
+        const name = String(raw.name || t.name || '').trim();
+        if (!name) return null;
+        return {
+          name,
+          description: String(raw.description || t.description || `Remote tool from ${m.name}`),
+          inputSchema: (raw.inputSchema || (t as any).inputSchema || { type: 'object', properties: {} }) as {
+            type: 'object';
+            properties?: Record<string, unknown>;
+          },
+          mcpUrl: m.url,
+          authToken: m.authToken,
+        };
+      })
+      .filter((t): t is NonNullable<typeof t> => t !== null)
+  );
+
+  // Workflow-basis scoping: Only include remote tools allowed for this specific workflow
+  const allowedRemoteTools = externalTools.filter((t) =>
+    endpoint.toolAllowlist.includes(t.name)
   );
 
   // 3. Create a per-request MCP server using low-level Server class
@@ -102,9 +123,9 @@ export async function handleMcpRequest(req: Request, res: Response): Promise<voi
     },
   );
 
-  // 4. Handle tools/list — return allowed native tools + user's connected external tools
+  // 4. Handle tools/list — return allowed native tools + allowed workflow external tools
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const allowedTools = toolRegistry.getFiltered(endpoint.toolAllowlist, endpoint.scopes);
+    const allowedTools = toolRegistry.getFiltered(endpoint.toolAllowlist, effectiveScopes);
     const nativeTools = allowedTools.map((tool) => ({
       name: tool.name,
       description: tool.description,
@@ -114,13 +135,10 @@ export async function handleMcpRequest(req: Request, res: Response): Promise<voi
       },
     }));
 
-    const remoteTools = externalTools.map((t) => ({
+    const remoteTools = allowedRemoteTools.map((t) => ({
       name: t.name,
       description: t.description,
-      inputSchema: (t.inputSchema || { type: 'object', properties: {} }) as {
-        type: 'object';
-        properties?: Record<string, unknown>;
-      },
+      inputSchema: t.inputSchema,
     }));
 
     return {
@@ -133,8 +151,8 @@ export async function handleMcpRequest(req: Request, res: Response): Promise<voi
     const toolName = request.params.name;
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
 
-    // Check if it's an external tool from a connected server (e.g. Spent App)
-    const remoteTool = externalTools.find((t) => t.name === toolName);
+    // Check if it's an allowed external tool from a connected server (e.g. Spent App)
+    const remoteTool = allowedRemoteTools.find((t) => t.name === toolName);
     if (remoteTool) {
       log.info(
         { tool: toolName, url: remoteTool.mcpUrl, userId: ctx.userId },
