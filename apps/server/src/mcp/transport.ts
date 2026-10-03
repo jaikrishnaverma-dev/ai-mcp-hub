@@ -1,0 +1,195 @@
+/**
+ * MCP Transport — Streamable HTTP transport for MCP protocol.
+ *
+ * This sets up the MCP server using the official SDK and wires it
+ * into Express routes. Each endpoint slug resolves to a filtered
+ * set of tools via the endpoint's toolAllowlist.
+ *
+ * Security:
+ * - tools/list returns ONLY allowlisted tools
+ * - tools/call RE-CHECKS allowlist (not just filtering)
+ * - Endpoint slug is routing, NOT authentication
+ */
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+import type { Request, Response } from 'express';
+import { Endpoint } from '../modules/endpoints/model.js';
+import { toolRegistry } from './registry.js';
+import { registerP1Tools } from './tools.js';
+import { createModuleLogger } from '../config/index.js';
+import { ForbiddenError, AppError } from '../errors.js';
+import type { ServiceContext } from '@assistant/shared';
+
+const log = createModuleLogger('mcp');
+
+// Register all P1 tools at startup
+registerP1Tools();
+
+/**
+ * Handle an MCP request for a specific endpoint slug.
+ *
+ * Flow:
+ * 1. Resolve endpoint by slug
+ * 2. Create MCP server scoped to this endpoint's allowlist
+ * 3. Process the request through MCP protocol
+ */
+export async function handleMcpRequest(req: Request, res: Response): Promise<void> {
+  const slug = req.params['slug'];
+
+  if (!slug) {
+    res.status(400).json({ error: 'Missing endpoint slug' });
+    return;
+  }
+
+  // 1. Resolve endpoint
+  const endpoint = await Endpoint.findOne({ slug, status: 'active' });
+  if (!endpoint) {
+    res.status(404).json({ error: 'Endpoint not found or revoked' });
+    return;
+  }
+
+  // 2. Build service context
+  // TODO: In production, extract userId from OAuth token
+  // For now, use the endpoint owner as the user (dev mode)
+  const ctx: ServiceContext = {
+    userId: endpoint.ownerId.toString(),
+    actorType: 'ai',
+    endpointScopes: endpoint.scopes,
+  };
+
+  // 3. Create a per-request MCP server using low-level Server class
+  const server = new Server(
+    {
+      name: `assistant-${endpoint.name}`,
+      version: '0.1.0',
+    },
+    {
+      capabilities: {
+        tools: {},
+        resources: endpoint.instructions ? {} : undefined,
+      },
+    },
+  );
+
+  // 4. Handle tools/list — return only allowed tools
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    const allowedTools = toolRegistry.getFiltered(endpoint.toolAllowlist, endpoint.scopes);
+    return {
+      tools: allowedTools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema as {
+          type: 'object';
+          properties?: Record<string, unknown>;
+        },
+      })),
+    };
+  });
+
+  // 5. Handle tools/call — RE-CHECK allowlist (security-critical)
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const toolName = request.params.name;
+    const args = (request.params.arguments ?? {}) as Record<string, unknown>;
+
+    // SECURITY: Re-check allowlist on every call
+    if (!toolRegistry.isAllowed(toolName, endpoint.toolAllowlist, endpoint.scopes)) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({ error: 'FORBIDDEN', message: `Tool '${toolName}' is not allowed on this endpoint` }),
+          },
+        ],
+        isError: true,
+      } as Record<string, unknown>;
+    }
+
+    const tool = toolRegistry.get(toolName);
+    if (!tool) {
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ error: 'NOT_FOUND', message: `Tool '${toolName}' not found` }) }],
+        isError: true,
+      } as Record<string, unknown>;
+    }
+
+    log.info(
+      { endpoint: endpoint.name, tool: toolName, userId: ctx.userId },
+      'MCP tool called',
+    );
+
+    try {
+      const result = await tool.handler(args, ctx);
+      return { ...result } as Record<string, unknown>;
+    } catch (err) {
+      if (err instanceof AppError) {
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ error: err.code, message: err.message }) }],
+          isError: true,
+        } as Record<string, unknown>;
+      }
+      log.error({ err, tool: toolName }, 'Unexpected tool error');
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ error: 'INTERNAL_ERROR', message: 'An unexpected error occurred' }) }],
+        isError: true,
+      } as Record<string, unknown>;
+    }
+  });
+
+  // 6. If the endpoint has instructions, register resource handlers
+  if (endpoint.instructions) {
+    server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+      resources: [
+        {
+          uri: 'assistant://instructions',
+          name: 'Workflow Instructions',
+          description: 'Instructions for how this AI workflow should behave',
+          mimeType: 'text/plain',
+        },
+      ],
+    }));
+
+    server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+      if (request.params.uri === 'assistant://instructions') {
+        return {
+          contents: [
+            {
+              uri: 'assistant://instructions',
+              mimeType: 'text/plain',
+              text: endpoint.instructions!,
+            },
+          ],
+        };
+      }
+      throw new Error(`Resource not found: ${request.params.uri}`);
+    });
+  }
+
+  // 7. Process via Streamable HTTP transport
+  try {
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined, // Stateless mode
+    });
+
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch (err) {
+    log.error({ err, slug }, 'MCP request failed');
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal MCP error' });
+    }
+  }
+}
+
+/**
+ * Handle MCP DELETE requests (session cleanup).
+ */
+export async function handleMcpDelete(_req: Request, res: Response): Promise<void> {
+  // Stateless mode — nothing to clean up
+  res.status(200).json({ ok: true });
+}

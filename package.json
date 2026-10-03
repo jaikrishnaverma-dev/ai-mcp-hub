@@ -1,0 +1,21 @@
+{
+  "name": "assistant",
+  "private": true,
+  "description": "AI-Native Process Manager — MCP server + React portal",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "clean": "turbo clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "pnpm@10.25.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
