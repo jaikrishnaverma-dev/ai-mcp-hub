@@ -1,284 +1,241 @@
 import { useState, useEffect } from 'react';
-import { Target, AlertTriangle, Clock, CheckCircle2, ArrowRight, Lightbulb, RefreshCw } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card.js';
-import { Badge } from './ui/badge.js';
+import {
+  api,
+  type DailyBriefResponse,
+  type UserProfile,
+} from '../api/client.js';
+import {
+  RefreshCw,
+  Target,
+  AlertTriangle,
+  Clock,
+  AlertCircle,
+  ArrowRight,
+} from 'lucide-react';
 import { Button } from './ui/button.js';
-import { api, type DailyBriefResponse } from '../api/client.js';
+import { StatusBadge, PriorityBadge } from './ui/badge.js';
 
 interface DailyBriefViewProps {
+  currentUser: UserProfile | null;
+  onRequireAuth: (intent?: string) => void;
   onNavigateToTasks: () => void;
-  onNavigateToBlockers: () => void;
 }
 
-export function DailyBriefView({ onNavigateToTasks, onNavigateToBlockers }: DailyBriefViewProps) {
+export function DailyBriefView({
+  currentUser,
+  onRequireAuth,
+  onNavigateToTasks,
+}: DailyBriefViewProps) {
   const [brief, setBrief] = useState<DailyBriefResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const loadBrief = async () => {
+  const fetchBrief = async () => {
+    if (!currentUser) return;
+    setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
       const data = await api.getDailyBrief();
       setBrief(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch daily brief');
+      console.error('Failed to load brief:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadBrief();
-  }, []);
-
-  const handleComplete = async (taskId: string) => {
-    try {
-      await api.completeTask(taskId, 'Completed from Daily Brief dashboard');
-      await loadBrief();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to complete task');
+    if (currentUser) {
+      fetchBrief();
     }
-  };
+  }, [currentUser]);
 
-  if (loading && !brief) {
+  if (!currentUser) {
     return (
-      <div className="flex flex-col items-center justify-center p-16 space-y-4">
-        <RefreshCw className="w-8 h-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Aggregating daily brief and scoring focus priorities...</p>
+      <div className="container max-w-4xl mx-auto py-16 px-4 text-center space-y-4">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
+          <Target className="h-7 w-7 text-zinc-900 dark:text-zinc-100" />
+        </div>
+        <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Daily Executive Brief</h2>
+        <p className="text-sm text-zinc-500 max-w-md mx-auto">
+          AI-curated brief of your top focus targets, active blockers, and commitments scheduled for today.
+        </p>
+        <div className="pt-2">
+          <Button
+            onClick={() => onRequireAuth('Sign in to view your daily executive brief')}
+            className="rounded-xl h-10 px-5 text-sm font-semibold bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-sm"
+          >
+            Sign In to View Brief
+          </Button>
+        </div>
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <Card className="border-destructive/40 bg-destructive/10">
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-3 text-destructive">
-            <AlertTriangle className="w-5 h-5 shrink-0" />
-            <p className="text-sm font-medium">{error}</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={loadBrief} className="mt-4">
-            Retry
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!brief) return null;
+  const focusCount = brief?.suggestedFocus?.length ?? 3;
+  const blockerCount = brief?.blockedTasks?.length ?? 0;
+  const dueCount = brief?.dueTasks?.length ?? 0;
+  const overdueCount = brief?.overdueTasks?.length ?? 0;
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner / Today Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b">
+    <div className="container max-w-4xl mx-auto py-8 px-4 sm:px-6 space-y-8">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-zinc-200/80 dark:border-zinc-800">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Daily Executive Brief</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {brief.today} · AI-curated state of commitments and bottlenecks
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-950 dark:text-zinc-100">
+            Daily Executive Brief
+          </h1>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+            {brief?.date || new Date().toISOString().split('T')[0]} · Timezone: {brief?.timezone || 'Asia/Kolkata'} · AI-curated commitments
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={loadBrief} className="gap-1.5 text-xs">
-            <RefreshCw className="w-3.5 h-3.5" />
-            Refresh Brief
-          </Button>
+
+        <div>
+          <button
+            onClick={fetchBrief}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-2xs"
+          >
+            <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh Brief</span>
+          </button>
         </div>
       </div>
 
-      {/* Metric Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-card to-card/60">
-          <CardHeader className="p-4 pb-2">
-            <CardDescription className="flex items-center justify-between text-xs">
-              <span>Focus Targets</span>
-              <Target className="w-4 h-4 text-primary" />
-            </CardDescription>
-            <CardTitle className="text-2xl font-mono">{brief.focus.length}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 text-xs text-muted-foreground">
-            Top scored for momentum today
-          </CardContent>
-        </Card>
+      {/* Compressed Consolidated Metric Strip (High Density & Effective Info) */}
+      <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs overflow-hidden">
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-zinc-100 dark:divide-zinc-800">
+          {/* Focus Targets */}
+          <div className="p-3.5 sm:p-4 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="font-medium">Focus Targets</span>
+              <Target className="h-4 w-4 text-zinc-700 dark:text-zinc-300" />
+            </div>
+            <div className="my-1.5">
+              <span className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-100">
+                {focusCount}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">Top momentum today</p>
+          </div>
 
-        <Card className="bg-gradient-to-br from-card to-card/60">
-          <CardHeader className="p-4 pb-2">
-            <CardDescription className="flex items-center justify-between text-xs">
-              <span>Active Blockers</span>
-              <AlertTriangle className="w-4 h-4 text-red-400" />
-            </CardDescription>
-            <CardTitle className="text-2xl font-mono text-red-400">{brief.blocked.length}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 text-xs text-muted-foreground">
-            {brief.blocked.length > 0 ? 'Requires intervention' : 'No bottlenecks detected'}
-          </CardContent>
-        </Card>
+          {/* Active Blockers */}
+          <div className="p-3.5 sm:p-4 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="font-medium">Active Blockers</span>
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+            </div>
+            <div className="my-1.5">
+              <span className={`text-2xl sm:text-3xl font-bold tracking-tight ${blockerCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-950 dark:text-zinc-100'}`}>
+                {blockerCount}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">
+              {blockerCount > 0 ? 'Requires attention' : 'None blocking'}
+            </p>
+          </div>
 
-        <Card className="bg-gradient-to-br from-card to-card/60">
-          <CardHeader className="p-4 pb-2">
-            <CardDescription className="flex items-center justify-between text-xs">
-              <span>Due Today</span>
-              <Clock className="w-4 h-4 text-blue-400" />
-            </CardDescription>
-            <CardTitle className="text-2xl font-mono">{brief.dueToday.length}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 text-xs text-muted-foreground">
-            Commitments closing by midnight
-          </CardContent>
-        </Card>
+          {/* Due Today */}
+          <div className="p-3.5 sm:p-4 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="font-medium">Due Today</span>
+              <Clock className="h-4 w-4 text-blue-500" />
+            </div>
+            <div className="my-1.5">
+              <span className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-100">
+                {dueCount}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">Before midnight</p>
+          </div>
 
-        <Card className="bg-gradient-to-br from-card to-card/60">
-          <CardHeader className="p-4 pb-2">
-            <CardDescription className="flex items-center justify-between text-xs">
-              <span>Overdue Items</span>
-              <AlertTriangle className="w-4 h-4 text-amber-400" />
-            </CardDescription>
-            <CardTitle className="text-2xl font-mono text-amber-400">{brief.overdue.length}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0 text-xs text-muted-foreground">
-            Past due deadline
-          </CardContent>
-        </Card>
+          {/* Overdue Items */}
+          <div className="p-3.5 sm:p-4 flex flex-col justify-between">
+            <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="font-medium">Overdue</span>
+              <AlertCircle className="h-4 w-4 text-amber-500" />
+            </div>
+            <div className="my-1.5">
+              <span className={`text-2xl sm:text-3xl font-bold tracking-tight ${overdueCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-950 dark:text-zinc-100'}`}>
+                {overdueCount}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">
+              {overdueCount > 0 ? 'Past deadline' : 'None overdue'}
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Main Focus Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-              <div>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Target className="w-5 h-5 text-primary" />
-                  Suggested Focus (Top 3)
-                </CardTitle>
-                <CardDescription>
-                  Tasks calculated by priority weighting and deadline proximity
-                </CardDescription>
-              </div>
-              <Button variant="ghost" size="sm" onClick={onNavigateToTasks} className="text-xs gap-1">
-                All Tasks <ArrowRight className="w-3.5 h-3.5" />
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {brief.focus.length === 0 ? (
-                <div className="text-center py-8 text-sm text-muted-foreground">
-                  🎉 No urgent tasks pending! You're caught up.
-                </div>
-              ) : (
-                brief.focus.map((task, index) => (
-                  <div
-                    key={task.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-lg border bg-background/50 hover:bg-muted/40 transition-colors gap-3"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-mono font-bold mt-0.5">
-                        #{index + 1}
-                      </span>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-sm text-foreground">{task.title}</span>
-                          <Badge variant={task.priority as any}>{task.priority}</Badge>
-                          <Badge variant={task.status as any}>{task.status}</Badge>
-                        </div>
-                        {task.parentTitle && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Project: <span className="text-foreground/80">{task.parentTitle}</span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleComplete(task.id)}
-                        className="h-8 gap-1.5 text-xs hover:border-emerald-500/50 hover:text-emerald-400"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        Mark Done
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+      {/* Suggested Focus (Top 3) */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Target className="h-4 w-4 text-zinc-900 dark:text-zinc-100" />
+            <h2 className="text-base sm:text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+              Suggested Focus (Top 3)
+            </h2>
+          </div>
+          <button
+            onClick={onNavigateToTasks}
+            className="flex items-center gap-1 text-xs font-semibold text-zinc-900 dark:text-zinc-100 hover:underline"
+          >
+            <span>All Tasks</span>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <p className="text-xs text-zinc-500 -mt-2">
+          Tasks calculated by priority weighting and deadline proximity
+        </p>
 
-          {/* Active Blockers Alert Box */}
-          {brief.blocked.length > 0 && (
-            <Card className="border-red-500/30 bg-red-500/5">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-base text-red-400 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4" />
-                  Active Blockers Requiring Attention ({brief.blocked.length})
-                </CardTitle>
-                <Button variant="ghost" size="sm" onClick={onNavigateToBlockers} className="text-xs text-red-400 hover:text-red-300">
-                  Manage Blockers
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {brief.blocked.map((item) => (
-                  <div key={item.id} className="p-3 rounded-md border border-red-500/20 bg-background/60 text-xs">
-                    <div className="font-semibold text-foreground flex items-center justify-between">
-                      <span>{item.title}</span>
-                      <Badge variant="blocked">blocked</Badge>
-                    </div>
-                    {item.blockers.map((b, idx) => (
-                      <p key={idx} className="text-muted-foreground mt-1 text-[11px]">
-                        ⚠️ Reason: {b}
+        {/* List of Focus Items */}
+        <div className="space-y-3">
+          {(!brief?.suggestedFocus || brief.suggestedFocus.length === 0) ? (
+            <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 text-center text-xs text-zinc-500">
+              No pending focus items. All tasks are currently on track!
+            </div>
+          ) : (
+            brief.suggestedFocus.slice(0, 3).map((item, idx) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <span className="font-mono text-xs font-bold text-zinc-400 shrink-0">
+                    #{idx + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                      {item.title}
+                    </p>
+                    {item.parentTitle && (
+                      <p className="text-xs text-zinc-500 truncate">
+                        Parent: {item.parentTitle}
                       </p>
-                    ))}
+                    )}
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-        </div>
+                </div>
 
-        {/* Right Sidebar: Due Today & Recent Decisions */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Clock className="w-4 h-4 text-blue-400" />
-                Due Today ({brief.dueToday.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {brief.dueToday.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No tasks scheduled for today's deadline.</p>
-              ) : (
-                brief.dueToday.map((task) => (
-                  <div key={task.id} className="p-2.5 rounded-md border text-xs flex items-center justify-between">
-                    <span className="font-medium truncate mr-2">{task.title}</span>
-                    <Badge variant={task.priority as any}>{task.priority}</Badge>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          {brief.recentDecisions && brief.recentDecisions.length > 0 && (
-            <Card className="border-border">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Lightbulb className="w-4 h-4 text-amber-400" />
-                  Recent Decisions ({brief.recentDecisions.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2.5">
-                {brief.recentDecisions.map((d) => (
-                  <div key={d.id} className="p-2.5 rounded-md border bg-muted/30 text-xs space-y-1">
-                    <p className="font-medium text-foreground">{d.summary}</p>
-                    <p className="text-[11px] text-muted-foreground italic">"{d.rationale}"</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+                <div className="flex items-center gap-1.5 shrink-0 ml-3">
+                  <PriorityBadge priority={item.priority} size="xs" />
+                  <StatusBadge status={item.status} size="xs" />
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>
+
+      {/* Summary Note */}
+      {brief?.summary && (
+        <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-xs space-y-2">
+          <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
+            AI Assistant Executive Note
+          </p>
+          <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed">
+            {brief.summary}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

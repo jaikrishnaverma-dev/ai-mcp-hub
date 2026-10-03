@@ -59,10 +59,7 @@ const userSchema = new Schema<UserDocument>(
   },
 );
 
-// --- Indexes ---
-
-userSchema.index({ externalId: 1 }, { unique: true });
-userSchema.index({ email: 1 }, { unique: true });
+// --- Indexes handled via field definitions (unique: true) ---
 
 // --- Model ---
 

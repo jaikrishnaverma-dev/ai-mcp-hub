@@ -7,7 +7,7 @@
 import mongoose from 'mongoose';
 import { logger } from './logger.js';
 
-const MONGODB_URI = process.env['MONGODB_URI'] || 'mongodb://localhost:27017/assistant?replicaSet=rs0';
+const MONGODB_URI = process.env['MONGODB_URI'] || 'mongodb://127.0.0.1:27017/assistant?replicaSet=rs0&directConnection=true';
 
 export async function connectDatabase(): Promise<typeof mongoose> {
   try {

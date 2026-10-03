@@ -74,9 +74,9 @@ export const listTasksInput = z.object({
   parentId: objectIdString.optional(),
   dueBefore: z.string().datetime({ offset: true }).optional(),
   dueAfter: z.string().datetime({ offset: true }).optional(),
-  includeSubtasks: z.boolean().default(false),
-  limit: z.number().int().min(1).max(50).default(20),
-  offset: z.number().int().min(0).default(0),
+  includeSubtasks: z.coerce.boolean().default(false),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
 });
 export type ListTasksInput = z.infer<typeof listTasksInput>;
 

@@ -94,10 +94,8 @@ const endpointSchema = new Schema<EndpointDocument>(
   },
 );
 
-// --- Indexes ---
-
-// Lookup by slug (URL routing)
-endpointSchema.index({ slug: 1 }, { unique: true });
+// Indexes: slug unique index handled via field definition (unique: true)
+// Compound index for owner lookup
 
 // User's endpoints
 endpointSchema.index({ ownerId: 1, status: 1 });

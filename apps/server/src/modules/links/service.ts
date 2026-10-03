@@ -217,7 +217,7 @@ export const linksService = {
               reason,
             },
           ],
-          { session },
+          { session, ordered: true },
         );
 
         log.info({ linkId: link._id, fromId, toId, kind }, 'Link created');

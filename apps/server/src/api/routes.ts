@@ -8,6 +8,7 @@
  * - Zod validation
  */
 import { Router, type Request, type Response, type NextFunction } from 'express';
+import mongoose from 'mongoose';
 import { z } from 'zod';
 import {
   createTaskInput,
@@ -18,6 +19,7 @@ import {
   setBlockerInput,
   createLinkInput,
   type ServiceContext,
+  type ItemType,
 } from '@assistant/shared';
 import { itemsService } from '../modules/items/service.js';
 import { linksService } from '../modules/links/service.js';
@@ -43,14 +45,30 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
     const requestedUserId = req.headers['x-user-id'] as string | undefined;
 
     let user = null;
-    if (requestedUserId) {
+    if (requestedUserId && requestedUserId !== 'none' && mongoose.isValidObjectId(requestedUserId)) {
       user = await User.findById(requestedUserId);
     }
+
+    if (requestedUserId === 'none') {
+      // Explicitly logged out session
+      (req as Request & { ctx?: ServiceContext; currentUser?: any }).currentUser = null;
+      next();
+      return;
+    }
+
     if (!user) {
       user = await User.findOne({});
     }
+    if (!user) {
+      user = await User.create({
+        externalId: 'demo-user-001',
+        email: 'jai@example.com',
+        name: 'Jai',
+        timezone: 'Asia/Kolkata',
+      });
+    }
 
-    const userId = user ? user._id.toString() : 'demo-user-001';
+    const userId = user._id.toString();
 
     (req as Request & { ctx: ServiceContext; currentUser: typeof user }).ctx = {
       userId,
@@ -66,7 +84,11 @@ async function requireAuth(req: Request, res: Response, next: NextFunction): Pro
 apiRouter.use(requireAuth);
 
 function getCtx(req: Request): ServiceContext {
-  return (req as Request & { ctx: ServiceContext }).ctx;
+  const ctx = (req as Request & { ctx?: ServiceContext }).ctx;
+  if (!ctx) {
+    throw new AppError('Authentication required. Please sign in.', 401, 'UNAUTHORIZED');
+  }
+  return ctx;
 }
 
 // ==============================================================================
@@ -76,14 +98,7 @@ function getCtx(req: Request): ServiceContext {
 apiRouter.get('/auth/me', (req: Request, res: Response) => {
   const user = (req as Request & { currentUser: any }).currentUser;
   if (!user) {
-    res.json({
-      user: {
-        id: 'demo-user-001',
-        name: 'Demo Admin',
-        email: 'admin@assistant.local',
-        timezone: 'Asia/Kolkata',
-      },
-    });
+    res.json({ user: null });
     return;
   }
   res.json({
@@ -163,10 +178,68 @@ apiRouter.get('/mcp-catalog', (_req: Request, res: Response) => {
   });
 });
 
-// List Endpoints
-apiRouter.get('/endpoints', async (_req: Request, res: Response, next: NextFunction) => {
+// List Endpoints for the logged-in user
+apiRouter.get('/endpoints', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const endpoints = await Endpoint.find({}).sort({ createdAt: -1 }).lean();
+    const ctx = getCtx(req);
+    let endpoints = await Endpoint.find({ ownerId: ctx.userId }).sort({ createdAt: -1 }).lean();
+
+    // If this user has no endpoints yet, provision default workflow groups
+    if (endpoints.length === 0) {
+      const defaultGroups = [
+        {
+          ownerId: ctx.userId,
+          name: 'Daily Assistant',
+          toolAllowlist: [
+            'get_daily_brief',
+            'create_task',
+            'update_task',
+            'complete_task',
+            'list_tasks',
+            'get_task',
+            'log_decision',
+            'link_tasks',
+            'set_blocker',
+          ],
+          scopes: ['read', 'write'],
+          instructions:
+            "You are the user's Daily Assistant. Start conversations by calling get_daily_brief, surface blockers and urgent commitments, and help manage tasks and decisions.",
+          status: 'active',
+        },
+        {
+          ownerId: ctx.userId,
+          name: 'Project Planner',
+          toolAllowlist: [
+            'list_tasks',
+            'get_task',
+            'create_task',
+            'update_task',
+            'link_tasks',
+            'set_blocker',
+            'log_decision',
+          ],
+          scopes: ['read', 'write'],
+          instructions:
+            'You are the Project Planner. Help break down initiatives, map dependencies with link_tasks, identify bottlenecks, and log architectural decisions.',
+          status: 'active',
+        },
+        {
+          ownerId: ctx.userId,
+          name: 'Read-Only Observer',
+          toolAllowlist: ['get_daily_brief', 'list_tasks', 'get_task'],
+          scopes: ['read'],
+          instructions:
+            'You are a Read-Only Observer. You can inspect tasks and retrieve the daily brief, but cannot make edits or create data.',
+          status: 'active',
+        },
+      ];
+
+      for (const grp of defaultGroups) {
+        await Endpoint.create(grp);
+      }
+      endpoints = await Endpoint.find({ ownerId: ctx.userId }).sort({ createdAt: -1 }).lean();
+    }
+
     res.json({
       endpoints: endpoints.map(e => ({
         id: e._id.toString(),
@@ -228,13 +301,20 @@ apiRouter.post('/endpoints', async (req: Request, res: Response, next: NextFunct
 apiRouter.patch('/endpoints/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params['id'] as string;
+    const ctx = getCtx(req);
     const { status, toolAllowlist, name, instructions } = req.body;
 
-    const endpoint = await Endpoint.findById(id);
+    const endpoint = await Endpoint.findOne({ _id: id, ownerId: ctx.userId });
     if (!endpoint) throw new NotFoundError('Endpoint', id);
 
     if (status) endpoint.status = status;
-    if (toolAllowlist && Array.isArray(toolAllowlist)) endpoint.toolAllowlist = toolAllowlist;
+    if (toolAllowlist && Array.isArray(toolAllowlist)) {
+      if (toolAllowlist.length > 15) {
+        res.status(400).json({ error: 'BAD_REQUEST', message: 'Tool allowlist cannot exceed 15 tools' });
+        return;
+      }
+      endpoint.toolAllowlist = toolAllowlist;
+    }
     if (name) endpoint.name = name;
     if (instructions !== undefined) endpoint.instructions = instructions;
 
@@ -260,7 +340,9 @@ apiRouter.patch('/endpoints/:id', async (req: Request, res: Response, next: Next
 apiRouter.delete('/endpoints/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params['id'] as string;
-    await Endpoint.findByIdAndDelete(id);
+    const ctx = getCtx(req);
+    const result = await Endpoint.findOneAndDelete({ _id: id, ownerId: ctx.userId });
+    if (!result) throw new NotFoundError('Endpoint', id);
     res.json({ deleted: true });
   } catch (err) {
     next(err);
@@ -305,9 +387,10 @@ apiRouter.get('/items/:id', async (req: Request, res: Response, next: NextFuncti
 
 apiRouter.post('/items', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const type = (req.body.type as ItemType) || 'task';
     const input = createTaskInput.parse(req.body);
     const result = await itemsService.createItem(
-      { type: 'task', ...input },
+      { type, ...input },
       getCtx(req),
     );
     res.status(201).json(result);
@@ -467,6 +550,14 @@ apiRouter.use((err: unknown, _req: Request, res: Response, _next: NextFunction) 
       error: err.code,
       message: err.message,
       ...( 'details' in err ? { details: (err as Record<string, unknown>)['details'] } : {} ),
+    });
+    return;
+  }
+
+  if (err instanceof Error && (err.name === 'BSONError' || err.name === 'CastError' || err.message.includes('24 character hex'))) {
+    res.status(400).json({
+      error: 'INVALID_ID_FORMAT',
+      message: 'Invalid ID format: must be a 24 character hex string',
     });
     return;
   }

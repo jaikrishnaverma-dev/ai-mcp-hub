@@ -1,161 +1,173 @@
-import React, { useState } from 'react';
-import { LogIn, Check, Shield } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog.js';
+
 import { Button } from './ui/button.js';
 import { Input } from './ui/input.js';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/card.js';
-import { Badge } from './ui/badge.js';
-import { type UserProfile } from '../api/client.js';
+import { Label } from './ui/label.js';
+import { Avatar, AvatarFallback } from './ui/avatar.js';
+import { api, setActiveUser, type UserProfile } from '../api/client.js';
+import { LogIn, UserCheck, AlertCircle } from 'lucide-react';
 
 interface LoginModalProps {
-  currentUser: UserProfile | null;
-  users: UserProfile[];
-  onSelectUser: (user: UserProfile) => void;
-  onLoginNewUser: (email: string, name: string) => Promise<void>;
-  onClose: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess?: (user: UserProfile) => void;
+  reason?: string;
 }
 
-export function LoginModal({
-  currentUser,
-  users,
-  onSelectUser,
-  onLoginNewUser,
-  onClose,
-}: LoginModalProps) {
-  const [email, setEmail] = useState('');
+export function LoginModal({ open, onOpenChange, onSuccess, reason }: LoginModalProps) {
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [selectedEmail, setSelectedEmail] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isNewAccount, setIsNewAccount] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      api.getUsers()
+        .then((res) => {
+          setUsers(res.users);
+          const first = res.users[0];
+          if (first && !selectedEmail) {
+            setSelectedEmail(first.email);
+            setName(first.name);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [open, selectedEmail]);
+
+  const handleSelectQuickUser = (u: UserProfile) => {
+    setSelectedEmail(u.email);
+    setName(u.name);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!selectedEmail.trim()) {
+      setError('Please provide an email address.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
 
     try {
-      setLoading(true);
-      await onLoginNewUser(email.trim(), name.trim());
-      onClose();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Login failed');
+      const res = await api.login({
+        email: selectedEmail.trim(),
+        name: name.trim() || undefined,
+      });
+
+      setActiveUser(res.user);
+      if (onSuccess) onSuccess(res.user);
+      onOpenChange(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <Card className="w-full max-w-md border-border/80 bg-card shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-        <CardHeader className="space-y-1">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <Shield className="w-5 h-5 text-primary" />
-              User Authentication & Switcher
-            </CardTitle>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
+              AI
+            </div>
+            <DialogTitle>Sign In to Assistant</DialogTitle>
           </div>
-          <CardDescription>
-            Select an active account or sign in to view and manage your MCP data.
-          </CardDescription>
-        </CardHeader>
+          <DialogDescription>
+            {reason || 'Authenticate to like tools, post comments, or build your own custom MCP workflows.'}
+          </DialogDescription>
+        </DialogHeader>
 
-        <CardContent className="space-y-4">
-          {/* Existing Users list */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Available Local Profiles
-            </label>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-              {users.map((u) => {
-                const isCurrent = currentUser?.id === u.id;
-                return (
-                  <button
-                    key={u.id}
-                    onClick={() => {
-                      onSelectUser(u);
-                      onClose();
-                    }}
-                    className={`w-full flex items-center justify-between p-3 rounded-lg border text-left transition-all ${
-                      isCurrent
-                        ? 'border-primary bg-primary/10 text-foreground font-medium'
-                        : 'border-border/60 hover:border-border hover:bg-muted/40 text-muted-foreground'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted font-bold text-xs text-foreground">
-                        {u.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="text-sm font-semibold text-foreground flex items-center gap-2">
-                          {u.name}
-                          {isCurrent && <Badge variant="default" className="text-[10px] py-0">Active</Badge>}
-                        </div>
-                        <div className="text-xs text-muted-foreground">{u.email}</div>
-                      </div>
+        {error && (
+          <div className="flex items-center gap-2 p-3 text-xs rounded-md bg-destructive/10 text-destructive border border-destructive/20">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {users.length > 0 && (
+          <div className="space-y-1.5 pt-1">
+            <Label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Quick Select Account</Label>
+            <div className="p-1.5 rounded-xl bg-zinc-50/70 border border-zinc-200/80 dark:bg-zinc-900/50 dark:border-zinc-800 space-y-1 max-h-36 overflow-y-auto">
+              {users.map((u) => (
+                <button
+                  type="button"
+                  key={u.id}
+                  onClick={() => handleSelectQuickUser(u)}
+                  className={`flex items-center justify-between p-2 rounded-lg border text-left transition-all text-xs w-full ${
+                    selectedEmail === u.email
+                      ? 'border-zinc-300/90 bg-white shadow-2xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 font-medium'
+                      : 'border-transparent bg-white/60 hover:bg-white hover:border-zinc-200/80 text-zinc-600 dark:bg-zinc-800/40 dark:border-transparent dark:hover:border-zinc-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 truncate min-w-0">
+                    <Avatar className="h-6 w-6 text-xs shrink-0">
+                      <AvatarFallback>{u.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="truncate min-w-0">
+                      <p className="text-xs font-medium leading-none truncate">{u.name}</p>
+                      <p className="text-[11px] text-zinc-400 truncate">{u.email}</p>
                     </div>
-                    {isCurrent && <Check className="w-4 h-4 text-primary shrink-0" />}
-                  </button>
-                );
-              })}
+                  </div>
+                  {selectedEmail === u.email && (
+                    <UserCheck className="h-4 w-4 text-zinc-900 dark:text-zinc-100 shrink-0 ml-2" />
+                  )}
+                </button>
+              ))}
             </div>
           </div>
+        )}
 
-          <div className="relative my-4">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">or sign in with email</span>
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-3 pt-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Email Address</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="e.g. developer@assistant.ai"
+              value={selectedEmail}
+              onChange={(e) => setSelectedEmail(e.target.value)}
+              required
+              className="h-11 rounded-xl text-sm border-zinc-200 bg-white dark:bg-zinc-900 dark:border-zinc-800"
+            />
           </div>
 
-          {/* Form to login or create account */}
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Email Address</label>
-              <Input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="developer@company.com"
-                className="mt-1"
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="name" className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Your Name (Optional)</Label>
+            <Input
+              id="name"
+              type="text"
+              placeholder="e.g. Jai Verma"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="h-11 rounded-xl text-sm border-zinc-200 bg-white dark:bg-zinc-900 dark:border-zinc-800"
+            />
+          </div>
 
-            {isNewAccount && (
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Full Name</label>
-                <Input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Alex Doe"
-                  className="mt-1"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-1">
-              <button
-                type="button"
-                onClick={() => setIsNewAccount(!isNewAccount)}
-                className="text-xs text-primary hover:underline"
-              >
-                {isNewAccount ? 'Already have an email account?' : '+ Create new user account'}
-              </button>
-            </div>
-
-            <Button type="submit" disabled={loading || !email.trim()} className="w-full gap-2">
-              <LogIn className="w-4 h-4" />
-              {loading ? 'Signing in...' : isNewAccount ? 'Create & Switch Account' : 'Sign In'}
+          <div className="pt-2">
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full h-11 rounded-xl bg-zinc-950 text-white hover:bg-zinc-900 font-medium text-sm transition-colors shadow-xs dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200 gap-2"
+            >
+              <LogIn className="h-4 w-4" />
+              <span>{loading ? 'Authenticating...' : 'Sign In'}</span>
             </Button>
-          </form>
-        </CardContent>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
 
-        <CardFooter className="flex justify-end pt-2 border-t">
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
-        </CardFooter>
-      </Card>
-    </div>
   );
 }

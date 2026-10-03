@@ -6,8 +6,7 @@ services:
     ports:
       - "27017:27017"
     volumes:
-      - .data/mongodb:/data/db
-      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro
+      - mongodb_data:/data/db
     healthcheck:
       test: |
         mongosh --eval "
@@ -29,7 +28,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - .data/redis:/data
+      - redis_data:/data
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -37,3 +36,7 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
+
+volumes:
+  mongodb_data:
+  redis_data:

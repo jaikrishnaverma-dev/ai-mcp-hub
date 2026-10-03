@@ -84,7 +84,12 @@ async function validateParent(
     return null;
   }
 
-  // This type requires a parent
+  // Tasks can be standalone (e.g. quick inbox tasks)
+  if (type === 'task' && !parentId) {
+    return null;
+  }
+
+  // Other types (story, subtask) require a parent
   if (!parentId) {
     throw new ValidationError(`${type} requires a parentId (must be a ${expectedParentType})`);
   }

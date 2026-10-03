@@ -1,141 +1,166 @@
 import { useState, useEffect } from 'react';
-import { Server, Database, LayoutDashboard } from 'lucide-react';
-import { Navbar } from './components/Navbar.js';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navbar, type NavTab } from './components/Navbar.js';
+import { MobileBottomNav } from './components/MobileBottomNav.js';
 import { DailyBriefView } from './components/DailyBriefView.js';
 import { EndpointsView } from './components/EndpointsView.js';
+import { CatalogView } from './components/CatalogView.js';
 import { DataBrowserView } from './components/DataBrowserView.js';
 import { LoginModal } from './components/LoginModal.js';
-import { api, setActiveUser, type UserProfile } from './api/client.js';
+
+import {
+  api,
+  getActiveUser,
+  type UserProfile,
+  type Skill,
+  type McpTool,
+} from './api/client.js';
+
+const PATH_MAP: Record<NavTab, string> = {
+  marketplace: '/tools',
+  endpoints: '/endpoints',
+  data: '/explorer',
+  brief: '/brief',
+};
+
+function getActiveTabFromPath(pathname: string): NavTab {
+  if (pathname.startsWith('/brief')) return 'brief';
+  if (pathname.startsWith('/endpoints')) return 'endpoints';
+  if (pathname.startsWith('/explorer') || pathname.startsWith('/data')) return 'data';
+  if (pathname.startsWith('/tools') || pathname.startsWith('/marketplace')) return 'marketplace';
+  return 'marketplace';
+}
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<'brief' | 'endpoints' | 'data'>('brief');
-  const [darkMode, setDarkMode] = useState(true);
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [usersList, setUsersList] = useState<UserProfile[]>([]);
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  // Light mode by default as requested by user
+  const [darkMode, setDarkMode] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // Initialize theme
+  const activeTab = getActiveTabFromPath(location.pathname);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(getActiveUser());
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [loginReason, setLoginReason] = useState<string | undefined>(undefined);
+
+  // Apply dark/light class to root
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
     } else {
       document.documentElement.classList.remove('dark');
-      document.documentElement.classList.add('light');
     }
   }, [darkMode]);
 
-  // Load current user profile & all users
-  const loadUsers = async () => {
-    try {
-      const [meRes, allRes] = await Promise.all([
-        api.getMe().catch(() => null),
-        api.getUsers().catch(() => ({ users: [] })),
-      ]);
-      if (meRes?.user) {
-        setCurrentUser(meRes.user);
-      }
-      setUsersList(allRes.users || []);
-    } catch (err) {
-      console.error('Failed to load user session', err);
-    }
-  };
-
+  // Load current user profile on startup
   useEffect(() => {
-    loadUsers();
+    api.getMe()
+      .then((res) => {
+        if (res.user) setCurrentUser(res.user);
+      })
+      .catch(() => {});
   }, []);
 
-  const handleSelectUser = (user: UserProfile) => {
-    setActiveUser(user.id);
-    setCurrentUser(user);
-    // Reload data for the new user context
-    window.location.reload();
+  const handleOpenLogin = (reason?: string) => {
+    setLoginReason(reason);
+    setLoginModalOpen(true);
   };
 
-  const handleLoginNewUser = async (email: string, name: string) => {
-    const res = await api.login({ email, name });
-    setActiveUser(res.user.id);
-    setCurrentUser(res.user);
-    await loadUsers();
+  const handleLoginSuccess = (user: UserProfile) => {
+    setCurrentUser(user);
+    setLoginModalOpen(false);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+  };
+
+  const handleTabChange = (tab: NavTab) => {
+    navigate(PATH_MAP[tab]);
+  };
+
+  const handleHarnessSkill = (_skill: Skill) => {
+    navigate('/endpoints');
+  };
+
+  const handleHarnessTool = (_tool: McpTool) => {
+    navigate('/endpoints');
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground transition-colors">
+    <div className="min-h-screen flex flex-col bg-[#f4f4f5] dark:bg-background text-foreground">
+      {/* Top Navbar */}
       <Navbar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        currentUser={currentUser}
+        onOpenLogin={handleOpenLogin}
+        onLogout={handleLogout}
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode(!darkMode)}
-        currentUser={currentUser}
-        onOpenAuth={() => setShowLoginModal(true)}
       />
 
-      <main className="container flex-1 py-6 space-y-6 max-w-7xl">
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-border/80 gap-1 pb-px">
-          <button
-            onClick={() => setActiveTab('brief')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
-              activeTab === 'brief'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4" />
-            Daily Brief
-          </button>
-
-          <button
-            onClick={() => setActiveTab('endpoints')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
-              activeTab === 'endpoints'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Server className="w-4 h-4" />
-            MCP Server & Endpoints
-          </button>
-
-          <button
-            onClick={() => setActiveTab('data')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
-              activeTab === 'data'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Database className="w-4 h-4" />
-            Users' Data Explorer
-          </button>
-        </div>
-
-        {/* View Switcher */}
-        {activeTab === 'brief' && (
-          <DailyBriefView
-            onNavigateToTasks={() => setActiveTab('data')}
-            onNavigateToBlockers={() => setActiveTab('data')}
+      {/* Main Content Area — React Router Routes */}
+      <main className="flex-1 pb-24 sm:pb-12">
+        <Routes>
+          <Route path="/" element={<Navigate to="/tools" replace />} />
+          <Route
+            path="/tools"
+            element={
+              <CatalogView
+                currentUser={currentUser}
+                onRequireAuth={handleOpenLogin}
+                onHarnessSkill={handleHarnessSkill}
+                onHarnessTool={handleHarnessTool}
+              />
+            }
           />
-        )}
-
-        {activeTab === 'endpoints' && <EndpointsView />}
-
-        {activeTab === 'data' && <DataBrowserView />}
+          <Route path="/marketplace" element={<Navigate to="/tools" replace />} />
+          <Route
+            path="/brief"
+            element={
+              <DailyBriefView
+                currentUser={currentUser}
+                onRequireAuth={handleOpenLogin}
+                onNavigateToTasks={() => navigate('/explorer')}
+              />
+            }
+          />
+          <Route
+            path="/endpoints"
+            element={
+              <EndpointsView
+                currentUser={currentUser}
+                onRequireAuth={handleOpenLogin}
+              />
+            }
+          />
+          <Route
+            path="/explorer"
+            element={
+              <DataBrowserView
+                currentUser={currentUser}
+                onRequireAuth={handleOpenLogin}
+              />
+            }
+          />
+          <Route path="/data" element={<Navigate to="/explorer" replace />} />
+          <Route path="*" element={<Navigate to="/tools" replace />} />
+        </Routes>
       </main>
 
-      {/* Login & User Switcher Modal */}
-      {showLoginModal && (
-        <LoginModal
-          currentUser={currentUser}
-          users={usersList}
-          onSelectUser={handleSelectUser}
-          onLoginNewUser={handleLoginNewUser}
-          onClose={() => setShowLoginModal(false)}
-        />
-      )}
+      {/* Mobile Fixed Bottom Navigation Bar (< 768px) */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+      />
 
-      {/* Footer */}
-      <footer className="border-t py-4 text-center text-xs text-muted-foreground">
-        Assistant AI-Native Process Manager · Connected to MongoDB Replica Set & MCP Streamable Transport
-      </footer>
+      {/* Auth Gate Login Modal */}
+      <LoginModal
+        open={loginModalOpen}
+        onOpenChange={setLoginModalOpen}
+        onSuccess={handleLoginSuccess}
+        reason={loginReason}
+      />
     </div>
   );
 }

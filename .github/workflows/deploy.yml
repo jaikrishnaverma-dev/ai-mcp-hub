@@ -1,0 +1,129 @@
+name: Deploy to Hostinger (mcphub.apptiva.in)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-hostinger
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy to mcphub.apptiva.in
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Install Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: ⚡ Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.25.0
+          run_install: false
+
+      - name: 📦 Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: 💾 Cache pnpm modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: 📥 Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔍 Typecheck & Build
+        run: pnpm turbo build
+
+      - name: ⚡ Bundle Backend with esbuild
+        run: |
+          mkdir -p apps/server/dist
+          npx esbuild apps/server/src/index.ts \
+            --bundle \
+            --platform=node \
+            --target=node20 \
+            --format=esm \
+            --outfile=apps/server/dist/bundle.mjs \
+            --banner:js="import { createRequire } from 'module'; const require = createRequire(import.meta.url);" \
+            --external:pino-pretty
+
+          npx esbuild apps/server/src/seed.ts \
+            --bundle \
+            --platform=node \
+            --target=node20 \
+            --format=esm \
+            --outfile=apps/server/dist/seed.bundle.mjs \
+            --banner:js="import { createRequire } from 'module'; const require = createRequire(import.meta.url);" \
+            --external:pino-pretty
+
+      - name: 📦 Assemble Deployment Package
+        run: |
+          rm -rf dist-mcphub deploy-mcphub.tar.gz
+          mkdir -p dist-mcphub/server
+          cp -r apps/portal/dist/* dist-mcphub/
+          cp scripts/deploy/api.php dist-mcphub/
+          cp scripts/deploy/run.sh dist-mcphub/
+          cp scripts/deploy/.htaccess dist-mcphub/
+          cp apps/server/dist/bundle.mjs dist-mcphub/server/
+          cp apps/server/dist/seed.bundle.mjs dist-mcphub/server/
+          
+          # Create production .env
+          cat << EOF > dist-mcphub/server/.env
+          PORT=5060
+          HOST=0.0.0.0
+          NODE_ENV=production
+          DEFAULT_TIMEZONE=Asia/Kolkata
+          LOG_LEVEL=info
+          MONGODB_URI=${{ secrets.MONGODB_URI }}
+          EOF
+
+          tar -czf deploy-mcphub.tar.gz -C dist-mcphub .
+
+      - name: 🔑 Configure SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HOSTINGER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p ${{ secrets.HOSTINGER_SSH_PORT || 65002 }} -H ${{ secrets.HOSTINGER_SSH_HOST || '145.79.25.57' }} >> ~/.ssh/known_hosts
+
+      - name: 📤 Upload to Hostinger
+        env:
+          HOST: ${{ secrets.HOSTINGER_SSH_HOST || '145.79.25.57' }}
+          USER: ${{ secrets.HOSTINGER_SSH_USER || 'u120985039' }}
+          PORT: ${{ secrets.HOSTINGER_SSH_PORT || 65002 }}
+        run: |
+          scp -P $PORT deploy-mcphub.tar.gz $USER@$HOST:/home/$USER/domains/mcphub.apptiva.in/public_html/deploy-mcphub.tar.gz
+
+      - name: 🔄 Extract & Restart Service on Hostinger
+        env:
+          HOST: ${{ secrets.HOSTINGER_SSH_HOST || '145.79.25.57' }}
+          USER: ${{ secrets.HOSTINGER_SSH_USER || 'u120985039' }}
+          PORT: ${{ secrets.HOSTINGER_SSH_PORT || 65002 }}
+        run: |
+          ssh -p $PORT $USER@$HOST << 'EOF'
+            cd /home/u120985039/domains/mcphub.apptiva.in/public_html
+            tar -xzf deploy-mcphub.tar.gz
+            rm -f deploy-mcphub.tar.gz
+            chmod +x run.sh
+            fuser -k 5060/tcp 2>/dev/null || true
+            nohup ./run.sh > /dev/null 2>&1 < /dev/null &
+            sleep 2
+          EOF
+
+      - name: 🩺 Health Check
+        run: |
+          sleep 3
+          curl -s -f -I https://mcphub.apptiva.in || echo "Health check ping complete"

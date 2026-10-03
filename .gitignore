@@ -33,3 +33,9 @@ coverage/
 
 # Docker volumes (local data)
 .data/
+
+# Deployment packages
+dist-hostinger/
+dist-mcphub/
+hostinger-build.zip
+*.tar.gz

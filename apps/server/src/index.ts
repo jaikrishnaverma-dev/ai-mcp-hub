@@ -12,6 +12,13 @@ import { connectDatabase, disconnectDatabase, logger } from './config/index.js';
 import { handleMcpRequest, handleMcpDelete } from './mcp/transport.js';
 import { apiRouter } from './api/routes.js';
 
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Import models to register them with Mongoose
 import './modules/items/model.js';
 import './modules/links/model.js';
@@ -33,7 +40,7 @@ async function main() {
   const app = express();
 
   // Middleware
-  app.use(helmet());
+  app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors());
   app.use(express.json({ limit: '1mb' }));
 
@@ -53,10 +60,36 @@ async function main() {
   // REST API routes for web portal
   app.use('/api', apiRouter);
 
+  // Serve static portal build if present (for single-port deployment on Hostinger / VPS)
+  const candidatePortalPaths = [
+    process.env['PORTAL_DIST'],
+    path.resolve(__dirname, '../../portal/dist'),
+    path.resolve(__dirname, '../portal/dist'),
+    path.resolve(__dirname, '../../../portal/dist'),
+    path.resolve(process.cwd(), 'portal/dist'),
+    path.resolve(process.cwd(), 'public'),
+    path.resolve(process.cwd(), 'apps/portal/dist'),
+  ].filter(Boolean) as string[];
+
+  const activePortalDist = candidatePortalPaths.find((p) => fs.existsSync(p));
+  if (activePortalDist) {
+    logger.info({ path: activePortalDist }, 'Serving static portal frontend');
+    app.use(express.static(activePortalDist));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/mcp') || req.path.startsWith('/health')) {
+        return next();
+      }
+      res.sendFile(path.join(activePortalDist, 'index.html'));
+    });
+  }
+
   // 3. Start server
   const server = app.listen(PORT, HOST, () => {
     logger.info({ port: PORT, host: HOST }, 'Assistant server started');
     logger.info('MCP endpoints available at: POST /mcp/:slug');
+    if (activePortalDist) {
+      logger.info('Portal UI available at: http://' + (HOST === '0.0.0.0' ? 'localhost' : HOST) + ':' + PORT);
+    }
   });
 
   // 4. Graceful shutdown

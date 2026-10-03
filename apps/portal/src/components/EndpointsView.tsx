@@ -1,68 +1,105 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Server,
+  api,
+  type Workflow,
+  type McpTool,
+  type UserProfile,
+} from '../api/client.js';
+import {
   Plus,
+  Server,
+  Terminal,
   Copy,
   Check,
-  Power,
   Trash2,
-  Terminal,
-  Cpu,
-  Layers,
-  Sparkles,
+  Edit,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/card.js';
-import { Badge } from './ui/badge.js';
 import { Button } from './ui/button.js';
 import { Input } from './ui/input.js';
-import { api, type EndpointItem, type McpToolCatalogItem } from '../api/client.js';
+import { Label } from './ui/label.js';
+import { Textarea } from './ui/textarea.js';
+import { Checkbox } from './ui/checkbox.js';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog.js';
 
-export function EndpointsView() {
-  const [endpoints, setEndpoints] = useState<EndpointItem[]>([]);
-  const [catalog, setCatalog] = useState<McpToolCatalogItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Create Endpoint modal state
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newInstructions, setNewInstructions] = useState('');
+interface EndpointsViewProps {
+  currentUser: UserProfile | null;
+  onRequireAuth: (intent?: string) => void;
+}
+
+export function EndpointsView({ currentUser, onRequireAuth }: EndpointsViewProps) {
+  const [endpoints, setEndpoints] = useState<Workflow[]>([]);
+  const [tools, setTools] = useState<McpTool[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
+
+  // Dialog state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingEndpoint, setEditingEndpoint] = useState<Workflow | null>(null);
+  const [name, setName] = useState('');
+  const [instructions, setInstructions] = useState('');
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
-  const [customSlug, setCustomSlug] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  // Inspector / Tester state
-  const [inspectEndpoint, setInspectEndpoint] = useState<EndpointItem | null>(null);
-  const [inspectResult, setInspectResult] = useState<string | null>(null);
-  const [inspectLoading, setInspectLoading] = useState(false);
+  // Ping Test state
+  const [pingingSlug, setPingingSlug] = useState<string | null>(null);
+  const [pingResult, setPingResult] = useState<{
+    slug: string;
+    tools: string[];
+    raw: unknown;
+  } | null>(null);
 
   const loadData = async () => {
+    if (!currentUser) return;
+    setLoading(true);
     try {
-      setLoading(true);
-      const [endRes, catRes] = await Promise.all([
-        api.getEndpoints(),
-        api.getMcpCatalog().catch(() => ({ tools: [] })),
+      const [epRes, catRes] = await Promise.all([
+        api.getWorkflows(),
+        api.getToolCatalog().catch(() => ({ tools: [] })),
       ]);
-      setEndpoints(endRes.endpoints || []);
-      setCatalog(catRes.tools || []);
-      if (endRes.endpoints?.length > 0 && !inspectEndpoint) {
-        setInspectEndpoint(endRes.endpoints[0] || null);
-      }
+      setEndpoints(epRes.endpoints);
+      setTools(catRes.tools);
     } catch (err) {
-      console.error('Failed to load MCP endpoints data', err);
+      console.error('Failed to load endpoints:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (currentUser) {
+      loadData();
+    }
+  }, [currentUser]);
 
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  const handleOpenCreate = () => {
+    if (!currentUser) {
+      onRequireAuth('Sign in to create custom MCP endpoints');
+      return;
+    }
+    setEditingEndpoint(null);
+    setName('');
+    setInstructions('');
+    setSelectedTools(tools.map((t) => t.name));
+    setFormError(null);
+    setDialogOpen(true);
+  };
+
+  const handleOpenEdit = (ep: Workflow) => {
+    setEditingEndpoint(ep);
+    setName(ep.name);
+    setInstructions(ep.instructions || '');
+    setSelectedTools(ep.toolAllowlist);
+    setFormError(null);
+    setDialogOpen(true);
   };
 
   const handleToggleTool = (toolName: string) => {
@@ -70,433 +107,414 @@ export function EndpointsView() {
       setSelectedTools(selectedTools.filter((t) => t !== toolName));
     } else {
       if (selectedTools.length >= 15) {
-        alert('Per AGENTS.md security guidelines, each endpoint allows up to 15 tools.');
+        setFormError('MCP endpoints are limited to 15 tools max for optimal AI token budget.');
         return;
       }
       setSelectedTools([...selectedTools, toolName]);
     }
   };
 
-  const handleCreateEndpoint = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || selectedTools.length === 0) {
-      alert('Please provide an endpoint name and select at least one tool.');
+    if (!name.trim()) {
+      setFormError('Please provide an endpoint name.');
+      return;
+    }
+    if (selectedTools.length === 0) {
+      setFormError('Please select at least one tool to include in the allowlist.');
       return;
     }
 
     try {
-      setIsSubmitting(true);
-      await api.createEndpoint({
-        name: newName.trim(),
-        instructions: newInstructions.trim() || undefined,
-        slug: customSlug.trim() || undefined,
-        toolAllowlist: selectedTools,
-      });
-      setShowCreateModal(false);
-      setNewName('');
-      setNewInstructions('');
-      setCustomSlug('');
-      setSelectedTools([]);
+      if (editingEndpoint) {
+        await api.updateWorkflow(editingEndpoint.id, {
+          name: name.trim(),
+          instructions: instructions.trim() || undefined,
+          toolAllowlist: selectedTools,
+        });
+      } else {
+        await api.createWorkflow({
+          name: name.trim(),
+          instructions: instructions.trim() || undefined,
+          toolAllowlist: selectedTools,
+        });
+      }
+      setDialogOpen(false);
       await loadData();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to create endpoint');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleToggleStatus = async (ep: EndpointItem) => {
-    try {
-      const nextStatus = ep.status === 'active' ? 'revoked' : 'active';
-      await api.updateEndpoint(ep.id, { status: nextStatus });
-      await loadData();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update status');
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save endpoint.');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this MCP endpoint?')) return;
+    if (!window.confirm('Are you sure you want to delete this MCP endpoint?')) return;
     try {
-      await api.deleteEndpoint(id);
+      await api.deleteWorkflow(id);
       await loadData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete endpoint');
+      console.error('Failed to delete endpoint:', err);
     }
   };
 
-  const runMcpTestPing = async (ep: EndpointItem) => {
+  const handleCopyUrl = (slug: string) => {
+    const url = `${window.location.origin}/mcp/${slug}`;
+    navigator.clipboard.writeText(url);
+    setCopiedSlug(slug);
+    setTimeout(() => setCopiedSlug(null), 2000);
+  };
+
+  const handlePing = async (slug: string) => {
+    setPingingSlug(slug);
     try {
-      setInspectLoading(true);
-      setInspectResult(null);
-
-      // Call MCP POST /mcp/:slug with a standard initialize or tools/list JSON-RPC request
-      const res = await fetch(`/mcp/${ep.slug}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 'test-ping-1',
-          method: 'tools/list',
-          params: {},
-        }),
-      });
-
-      const data = await res.json();
-      setInspectResult(JSON.stringify(data, null, 2));
+      const res = await api.pingWorkflow(slug);
+      const toolsReturned = Array.isArray((res as { result?: { tools?: Array<{ name: string }> } })?.result?.tools)
+        ? (res as { result: { tools: Array<{ name: string }> } }).result.tools.map((t) => t.name)
+        : [];
+      setPingResult({ slug, tools: toolsReturned, raw: res });
     } catch (err) {
-      setInspectResult(`Ping failed: ${err instanceof Error ? err.message : String(err)}`);
+      console.error('Ping test failed:', err);
+      setPingResult({ slug, tools: [], raw: { error: 'Handshake failed', details: String(err) } });
     } finally {
-      setInspectLoading(false);
+      setPingingSlug(null);
     }
   };
 
-  const origin = window.location.origin;
+  if (!currentUser) {
+    return (
+      <div className="container max-w-4xl mx-auto py-16 px-4 text-center space-y-4">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
+          <Server className="h-7 w-7 text-zinc-900 dark:text-zinc-100" />
+        </div>
+        <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+          MCP Server &amp; Endpoints
+        </h2>
+        <p className="text-sm text-zinc-500 max-w-md mx-auto">
+          Sign in to view your active MCP endpoints, adjust tool allowlists, and link AI clients to your process manager.
+        </p>
+        <div className="pt-2">
+          <Button
+            onClick={() => onRequireAuth('Sign in to manage MCP endpoints')}
+            className="rounded-xl h-10 px-5 text-sm font-semibold bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-sm"
+          >
+            Sign In to Manage Endpoints
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="container max-w-4xl mx-auto py-8 px-4 sm:px-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-bold tracking-tight">MCP Server & Endpoints Manager</h2>
-            <Badge variant="outline" className="font-mono text-xs">
-              HTTP Transport
-            </Badge>
+      <div className="space-y-3 pb-4 border-b border-zinc-200/80 dark:border-zinc-800">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-100">
+              MCP Server &amp; Endpoints
+            </h1>
+            <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
+              Deterministic tool filtering &amp; Streamable HTTP transports for Claude, Cursor, and ChatGPT
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Configure scoped AI endpoints, manage tool allowlists, and generate client configs
-          </p>
+
+          <button
+            onClick={handleOpenCreate}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:text-zinc-900 px-4 py-2 text-xs font-semibold shadow-xs transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Create Endpoint</span>
+          </button>
         </div>
-        <Button
-          onClick={() => {
-            setSelectedTools(catalog.map((t) => t.name).slice(0, 9));
-            setShowCreateModal(true);
-          }}
-          className="gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Create Scoped Endpoint
-        </Button>
+
+        <div>
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors shadow-2xs"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh Endpoints</span>
+          </button>
+        </div>
       </div>
 
-      {/* Endpoints Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {loading ? (
-          <div className="col-span-full text-center py-12 text-sm text-muted-foreground">
-            Loading endpoints...
-          </div>
-        ) : endpoints.length === 0 ? (
-          <div className="col-span-full p-8 border rounded-xl text-center space-y-3">
-            <Server className="w-8 h-8 mx-auto text-muted-foreground" />
-            <h3 className="font-semibold">No endpoints registered</h3>
-            <p className="text-xs text-muted-foreground">
-              Create an endpoint or run the seed script to start testing.
-            </p>
+      {/* Endpoints List */}
+      <div className="space-y-4">
+        {endpoints.length === 0 ? (
+          <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 text-center text-xs text-zinc-500">
+            No endpoints configured. Click &quot;Create Endpoint&quot; to provision your first one.
           </div>
         ) : (
           endpoints.map((ep) => {
-            const mcpUrl = `${origin}/mcp/${ep.slug}`;
-            const claudeConfig = JSON.stringify(
-              {
-                mcpServers: {
-                  [ep.slug]: {
-                    url: mcpUrl,
-                  },
-                },
-              },
-              null,
-              2,
-            );
+            const url = `${window.location.origin}/mcp/${ep.slug}`;
+            const isCopied = copiedSlug === ep.slug;
+            const isPinging = pingingSlug === ep.slug;
 
             return (
-              <Card
+              <div
                 key={ep.id}
-                className={`flex flex-col justify-between transition-all ${
-                  ep.status === 'active' ? 'border-border/80 hover:border-primary/50' : 'border-border/40 opacity-60'
-                }`}
+                className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 sm:p-6 shadow-xs space-y-4 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Cpu className="w-4 h-4 text-primary shrink-0" />
-                        {ep.name}
-                      </CardTitle>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="font-mono text-xs text-muted-foreground">/mcp/{ep.slug}</span>
-                      </div>
-                    </div>
-                    <Badge variant={ep.status === 'active' ? 'success' : 'destructive'} className="capitalize">
+                {/* Title & Actions Row */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="text-base sm:text-lg font-bold text-zinc-950 dark:text-zinc-100">
+                      {ep.name}
+                    </h2>
+                    <span className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2.5 py-0.5 text-[10px] font-semibold text-zinc-700 dark:text-zinc-300 uppercase">
                       {ep.status}
-                    </Badge>
+                    </span>
                   </div>
-                  {ep.instructions && (
-                    <CardDescription className="text-xs line-clamp-2 mt-2">
-                      {ep.instructions}
-                    </CardDescription>
-                  )}
-                </CardHeader>
 
-                <CardContent className="space-y-4 pt-1">
-                  {/* Tools preview */}
-                  <div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground font-medium mb-1.5">
-                      <span className="flex items-center gap-1">
-                        <Layers className="w-3.5 h-3.5" />
-                        Allowlisted Tools ({ep.toolAllowlist.length}/15)
+                  <div className="flex items-center gap-1.5 self-end sm:self-center">
+                    <button
+                      onClick={() => handleOpenEdit(ep)}
+                      className="inline-flex items-center gap-1 rounded-xl border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 transition-colors"
+                      title="Edit endpoint"
+                    >
+                      <Edit className="h-3 w-3" />
+                      <span>Edit</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDelete(ep.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-400 hover:text-red-600 transition-colors"
+                      title="Delete endpoint"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {ep.instructions && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                    {ep.instructions}
+                  </p>
+                )}
+
+                {/* Allowlist Section */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs text-zinc-500 font-medium">
+                    <span>Tool Allowlist ({ep.toolAllowlist.length} enabled)</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ep.toolAllowlist.map((tool) => (
+                      <span
+                        key={tool}
+                        className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2 py-0.5 text-[11px] font-mono text-zinc-700 dark:text-zinc-300"
+                      >
+                        {tool}
                       </span>
-                    </div>
-                    <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1">
-                      {ep.toolAllowlist.map((tool) => (
-                        <span
-                          key={tool}
-                          className="px-2 py-0.5 rounded text-[11px] font-mono bg-muted/60 text-muted-foreground border border-border"
-                        >
-                          {tool}
-                        </span>
-                      ))}
-                    </div>
+                    ))}
                   </div>
+                </div>
 
-                  {/* 1-Click Client Snippets */}
-                  <div className="space-y-2 pt-2 border-t">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground font-medium">Claude Desktop / Cursor</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCopy(claudeConfig, `claude-${ep.id}`)}
-                        className="h-6 px-2 text-[11px] gap-1 hover:text-primary"
-                      >
-                        {copiedId === `claude-${ep.id}` ? (
-                          <Check className="w-3 h-3 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                        Copy JSON Config
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground font-medium">Direct Stream URL</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCopy(mcpUrl, `url-${ep.id}`)}
-                        className="h-6 px-2 text-[11px] gap-1 hover:text-primary"
-                      >
-                        {copiedId === `url-${ep.id}` ? (
-                          <Check className="w-3 h-3 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                        Copy URL
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-
-                <CardFooter className="pt-3 border-t flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setInspectEndpoint(ep);
-                        runMcpTestPing(ep);
-                      }}
-                      className="h-7 text-xs gap-1"
+                {/* Streamable HTTP URL Copy Box */}
+                <div className="space-y-1 pt-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                    Streamable HTTP Connection URL
+                  </label>
+                  <div className="flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-800/40 p-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={url}
+                      className="flex-1 bg-transparent text-xs font-mono text-zinc-800 dark:text-zinc-200 outline-none truncate"
+                    />
+                    <button
+                      onClick={() => handleCopyUrl(ep.slug)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 transition-colors shadow-2xs"
                     >
-                      <Terminal className="w-3 h-3" />
-                      Test Ping
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleToggleStatus(ep)}
-                      className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
-                    >
-                      <Power className="w-3 h-3" />
-                      {ep.status === 'active' ? 'Disable' : 'Enable'}
-                    </Button>
+                      {isCopied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                      <span>{isCopied ? 'Copied' : 'Copy URL'}</span>
+                    </button>
                   </div>
+                </div>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDelete(ep.id)}
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                {/* Test MCP Ping Button */}
+                <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                  <button
+                    onClick={() => handlePing(ep.slug)}
+                    disabled={isPinging}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:text-zinc-900 py-2.5 text-xs font-semibold shadow-xs transition-colors disabled:opacity-50"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </CardFooter>
-              </Card>
+                    <Terminal className="h-3.5 w-3.5" />
+                    <span>{isPinging ? 'Pinging protocol...' : 'Test MCP Ping (tools/list)'}</span>
+                  </button>
+                </div>
+              </div>
             );
           })
         )}
       </div>
 
-      {/* Live MCP Inspector & Test Console */}
-      {inspectEndpoint && (
-        <Card className="border-border/80 bg-zinc-950/60 shadow-xl overflow-hidden mt-6">
-          <CardHeader className="bg-zinc-900/50 py-3 border-b flex flex-row items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-emerald-400" />
-              <CardTitle className="text-sm font-mono">
-                MCP Inspector — testing <span className="text-primary">/mcp/{inspectEndpoint.slug}</span>
-              </CardTitle>
+      {/* PING MODAL */}
+      <Dialog open={Boolean(pingResult)} onOpenChange={(open) => !open && setPingResult(null)}>
+        <DialogContent className="sm:max-w-lg rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <Terminal className="h-5 w-5 shrink-0 text-zinc-900 dark:text-zinc-100" />
+              <span>MCP Protocol Response: /{pingResult?.slug}</span>
+            </DialogTitle>
+            <DialogDescription className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+              Live response from Streamable HTTP MCP endpoint.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 pt-1">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-50/80 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 text-xs">
+              <span className="text-zinc-500">Tools exposed by allowlist:</span>
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100 font-mono">
+                {pingResult?.tools.length ?? 0} active
+              </span>
             </div>
-            <div className="flex items-center gap-2">
+
+            <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+              {pingResult?.tools.map((t) => (
+                <span key={t} className="rounded-lg border border-zinc-200/80 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-[11px] font-mono break-all text-zinc-800 dark:text-zinc-200">
+                  {t}
+                </span>
+              ))}
+            </div>
+
+            <div className="space-y-1.5 min-w-0">
+              <Label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block">
+                JSON-RPC Result:
+              </Label>
+              <pre className="rounded-xl bg-zinc-50 dark:bg-zinc-900 p-3 text-[11px] font-mono overflow-x-auto max-h-48 border border-zinc-200 dark:border-zinc-800 whitespace-pre-wrap break-all text-zinc-800 dark:text-zinc-200">
+                {JSON.stringify(pingResult?.raw, null, 2)}
+              </pre>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <Button
+              className="w-full h-11 rounded-xl bg-zinc-950 text-white hover:bg-zinc-900 font-medium text-sm transition-colors dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              onClick={() => setPingResult(null)}
+            >
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CREATE / EDIT DIALOG */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              {editingEndpoint ? 'Edit MCP Endpoint' : 'Create MCP Endpoint'}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+              Select tool allowlists to scope down what an AI agent can read or execute.
+            </DialogDescription>
+          </DialogHeader>
+
+          {formError && (
+            <div className="p-3 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSave} className="space-y-4 pt-1 w-full min-w-0 max-w-full overflow-hidden">
+            <div className="space-y-1.5 min-w-0 w-full">
+              <Label htmlFor="ep-name" className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                Endpoint Name
+              </Label>
+              <Input
+                id="ep-name"
+                placeholder="e.g. Daily Standup Assistant"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                className="h-11 rounded-xl text-sm border-zinc-200 bg-white dark:bg-zinc-900 dark:border-zinc-800 w-full"
+              />
+            </div>
+
+            <div className="space-y-1.5 min-w-0 w-full">
+              <Label htmlFor="ep-instructions" className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                Instructions / Role Prompt
+              </Label>
+              <Textarea
+                id="ep-instructions"
+                placeholder="System instructions provided to AI client..."
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                rows={3}
+                className="rounded-xl text-sm border-zinc-200 bg-white dark:bg-zinc-900 dark:border-zinc-800 resize-none p-3 w-full"
+              />
+            </div>
+
+            <div className="space-y-2 pt-1 min-w-0 w-full">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                  Allowed Tools ({selectedTools.length}/15 max)
+                </Label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTools(tools.map((t) => t.name))}
+                    className="text-xs text-zinc-900 dark:text-zinc-100 font-semibold hover:underline"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-xs text-zinc-300 dark:text-zinc-700">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTools([])}
+                    className="text-xs text-zinc-500 hover:underline"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+
+              {/* Grouped tool allowlist panel with subtle soft borders and safe responsive overflow */}
+              <div className="rounded-xl bg-zinc-50/70 border border-zinc-200/80 dark:bg-zinc-900/50 dark:border-zinc-800 p-2 space-y-1.5 max-h-56 overflow-y-auto overflow-x-hidden w-full min-w-0 max-w-full">
+                {tools.map((tool) => {
+                  const isChecked = selectedTools.includes(tool.name);
+                  return (
+                    <div
+                      key={tool.name}
+                      onClick={() => handleToggleTool(tool.name)}
+                      className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-xs cursor-pointer select-none transition-all w-full min-w-0 max-w-full overflow-hidden ${
+                        isChecked
+                          ? 'border-zinc-300/90 bg-white shadow-2xs dark:border-zinc-700 dark:bg-zinc-800'
+                          : 'border-transparent bg-white/60 hover:bg-white hover:border-zinc-200/80 text-zinc-600 dark:bg-zinc-800/40 dark:border-transparent dark:hover:border-zinc-700'
+                      }`}
+                    >
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={() => handleToggleTool(tool.name)}
+                        className="mt-0.5 shrink-0"
+                      />
+                      <div className="space-y-0.5 min-w-0 flex-1 overflow-hidden">
+                        <p className="font-mono font-medium text-zinc-900 dark:text-zinc-100 truncate text-xs">
+                          {tool.name}
+                        </p>
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 break-words leading-relaxed">
+                          {tool.description}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-2 w-full">
               <Button
-                variant="outline"
-                size="sm"
-                onClick={() => runMcpTestPing(inspectEndpoint)}
-                disabled={inspectLoading}
-                className="h-7 text-xs gap-1.5"
+                type="submit"
+                className="w-full h-11 rounded-xl bg-zinc-950 text-white hover:bg-zinc-900 font-medium text-sm transition-colors shadow-xs dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
               >
-                <Sparkles className="w-3 h-3 text-emerald-400" />
-                {inspectLoading ? 'Pinging...' : 'Send tools/list Request'}
+                {editingEndpoint ? 'Save Changes' : 'Create Endpoint'}
               </Button>
             </div>
-          </CardHeader>
-          <CardContent className="p-4 font-mono text-xs">
-            {inspectLoading ? (
-              <p className="text-muted-foreground animate-pulse">
-                Calling MCP endpoint protocol handshake...
-              </p>
-            ) : inspectResult ? (
-              <pre className="max-h-64 overflow-y-auto text-emerald-300 whitespace-pre-wrap bg-black/40 p-3 rounded-lg border border-zinc-800">
-                {inspectResult}
-              </pre>
-            ) : (
-              <p className="text-muted-foreground">
-                Click "Send tools/list Request" above to test the real-time MCP transport roundtrip.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+          </form>
 
-      {/* Create Endpoint Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-2xl border-border bg-card shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <CardHeader className="pb-3 border-b">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Plus className="w-5 h-5 text-primary" />
-                Create Scoped MCP Endpoint
-              </CardTitle>
-              <CardDescription>
-                Assign an AI persona, instructions, and an allowlist of up to 15 tools.
-              </CardDescription>
-            </CardHeader>
-
-            <form onSubmit={handleCreateEndpoint}>
-              <CardContent className="space-y-4 py-4 max-h-[70vh] overflow-y-auto">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-muted-foreground">Endpoint Name *</label>
-                    <Input
-                      required
-                      placeholder="e.g. Daily Executive Assistant"
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      className="mt-1"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-muted-foreground">
-                      Custom URL Slug (optional)
-                    </label>
-                    <Input
-                      placeholder="e.g. daily-assistant"
-                      value={customSlug}
-                      onChange={(e) => setCustomSlug(e.target.value)}
-                      className="mt-1 font-mono text-xs"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground">
-                    Persona / System Instructions
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder="e.g. You are an executive assistant helping plan the user's day..."
-                    value={newInstructions}
-                    onChange={(e) => setNewInstructions(e.target.value)}
-                    className="mt-1 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-semibold text-muted-foreground">
-                      Tool Allowlist ({selectedTools.length} / 15 selected)
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTools(catalog.map((t) => t.name).slice(0, 15))}
-                        className="text-xs text-primary hover:underline"
-                      >
-                        Select All (up to 15)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTools([])}
-                        className="text-xs text-muted-foreground hover:underline"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-1 border rounded-lg bg-background/50">
-                    {catalog.map((tool) => {
-                      const isSelected = selectedTools.includes(tool.name);
-                      return (
-                        <div
-                          key={tool.name}
-                          onClick={() => handleToggleTool(tool.name)}
-                          className={`p-2 rounded-md border cursor-pointer select-none transition-colors ${
-                            isSelected
-                              ? 'border-primary bg-primary/10 text-foreground'
-                              : 'border-border/60 hover:bg-muted/40 text-muted-foreground'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono text-xs font-semibold">{tool.name}</span>
-                            <Badge variant="outline" className="text-[10px] py-0">
-                              {tool.requiredScope}
-                            </Badge>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
-                            {tool.description}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </CardContent>
-
-              <CardFooter className="flex justify-end gap-2 pt-3 border-t">
-                <Button type="button" variant="ghost" onClick={() => setShowCreateModal(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSubmitting || selectedTools.length === 0}>
-                  {isSubmitting ? 'Creating...' : 'Create Endpoint'}
-                </Button>
-              </CardFooter>
-            </form>
-          </Card>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
