@@ -74,7 +74,8 @@ ssh ${SSH_OPTS} ${HOSTINGER_USER}@${HOSTINGER_HOST} bash -s << 'REMOTECMD'
   rm -f deploy-mcphub.tar.gz
   chmod +x run.sh
   
-  # Restart port 5060 process
+  # Restart port 5060 mcphub process cleanly (targets bundle.mjs only)
+  pkill -9 -f "bundle.mjs" 2>/dev/null || true
   fuser -k 5060/tcp 2>/dev/null || true
   nohup ./run.sh > /dev/null 2>&1 < /dev/null &
   sleep 2
