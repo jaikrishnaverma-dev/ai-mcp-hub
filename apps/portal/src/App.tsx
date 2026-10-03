@@ -7,6 +7,7 @@ import { EndpointsView } from './components/EndpointsView.js';
 import { CatalogView } from './components/CatalogView.js';
 import { DataBrowserView } from './components/DataBrowserView.js';
 import { OAuthConsentView } from './components/OAuthConsentView.js';
+import { SettingsView } from './components/SettingsView.js';
 import { LoginModal } from './components/LoginModal.js';
 
 import {
@@ -22,12 +23,14 @@ const PATH_MAP: Record<NavTab, string> = {
   endpoints: '/endpoints',
   data: '/explorer',
   brief: '/brief',
+  settings: '/settings',
 };
 
 function getActiveTabFromPath(pathname: string): NavTab {
   if (pathname.startsWith('/brief')) return 'brief';
   if (pathname.startsWith('/endpoints')) return 'endpoints';
   if (pathname.startsWith('/explorer') || pathname.startsWith('/data')) return 'data';
+  if (pathname.startsWith('/settings') || pathname.startsWith('/connect')) return 'settings';
   if (pathname.startsWith('/tools') || pathname.startsWith('/marketplace')) return 'marketplace';
   return 'marketplace';
 }
@@ -157,6 +160,16 @@ export function App() {
               />
             }
           />
+          <Route
+            path="/settings"
+            element={
+              <SettingsView
+                currentUser={currentUser}
+                onRequireAuth={handleOpenLogin}
+              />
+            }
+          />
+          <Route path="/connect" element={<Navigate to="/settings" replace />} />
           <Route path="*" element={<Navigate to="/tools" replace />} />
         </Routes>
       </main>

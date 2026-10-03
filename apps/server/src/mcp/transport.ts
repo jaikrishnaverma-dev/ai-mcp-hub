@@ -188,6 +188,14 @@ export async function handleMcpRequest(req: Request, res: Response): Promise<voi
 
   // 7. Process via Streamable HTTP transport
   try {
+    // Normalize Accept header: ensure test harnesses, curl, and HTTP clients succeed
+    const acceptHeader = req.headers['accept'] || '';
+    if (!acceptHeader.includes('text/event-stream')) {
+      req.headers['accept'] = acceptHeader
+        ? `${acceptHeader}, text/event-stream`
+        : 'application/json, text/event-stream';
+    }
+
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined, // Stateless mode
     });

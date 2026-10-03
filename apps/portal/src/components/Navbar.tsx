@@ -17,9 +17,10 @@ import {
   Sun,
   Moon,
   LayoutDashboard,
+  Settings,
 } from 'lucide-react';
 
-export type NavTab = 'brief' | 'endpoints' | 'marketplace' | 'data';
+export type NavTab = 'brief' | 'endpoints' | 'marketplace' | 'data' | 'settings';
 
 interface NavbarProps {
   activeTab: NavTab;
@@ -45,6 +46,7 @@ export function Navbar({
     { id: 'endpoints' as const, label: 'MCP Server & Endpoints', icon: Server },
     { id: 'marketplace' as const, label: 'Tools & Skills', icon: Sparkles },
     { id: 'data' as const, label: 'Users\' Data Explorer', icon: Database },
+    { id: 'settings' as const, label: 'Settings & Connect AI', icon: Settings },
   ];
 
   return (
