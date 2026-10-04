@@ -158,3 +158,40 @@ export const paginatedItems = z.object({
   hasMore: z.boolean(),
 });
 export type PaginatedItems = z.infer<typeof paginatedItems>;
+
+/** Explain delay input and output */
+export const explainDelayInput = z.object({
+  taskId: z.string().min(1, 'taskId is required'),
+});
+export type ExplainDelayInput = z.infer<typeof explainDelayInput>;
+
+export const explainDelayOutput = z.object({
+  taskId: z.string(),
+  title: z.string(),
+  status: z.string(),
+  dueAt: z.string().nullable(),
+  isDelayed: z.boolean(),
+  delayReason: z.string(),
+  directBlockers: z.array(
+    z.object({
+      id: z.string(),
+      reason: z.string(),
+      waitingOn: z.string().nullable(),
+      createdAt: z.string(),
+    }),
+  ),
+  dependencies: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      status: z.string(),
+      dueAt: z.string().nullable(),
+      isDelayed: z.boolean(),
+      relation: z.string(),
+    }),
+  ),
+  rootCauses: z.array(z.string()),
+  recommendation: z.string(),
+  summary: z.string(),
+});
+export type ExplainDelayOutput = z.infer<typeof explainDelayOutput>;

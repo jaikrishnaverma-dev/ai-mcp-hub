@@ -33,6 +33,14 @@ export const cancelReminderInput = z.object({
 });
 export type CancelReminderInput = z.infer<typeof cancelReminderInput>;
 
+// --- List Reminders ---
+export const listRemindersInput = z.object({
+  itemId: z.string().optional(),
+  state: z.enum(REMINDER_STATES).optional(),
+  limit: z.coerce.number().min(1).max(50).default(20),
+});
+export type ListRemindersInput = z.infer<typeof listRemindersInput>;
+
 // --- Update Notification Preferences ---
 export const updateNotificationPrefsInput = z.object({
   channels: z.array(z.enum(NOTIFICATION_CHANNELS)).min(1).optional(),

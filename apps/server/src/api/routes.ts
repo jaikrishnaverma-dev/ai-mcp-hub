@@ -585,6 +585,16 @@ apiRouter.get('/items/:id', async (req: Request, res: Response, next: NextFuncti
   }
 });
 
+apiRouter.get('/items/:id/explain-delay', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params['id'] as string;
+    const result = await plannerService.explainDelay({ taskId: id }, getCtx(req));
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 apiRouter.post('/items', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const input = createTaskInput.parse(req.body);

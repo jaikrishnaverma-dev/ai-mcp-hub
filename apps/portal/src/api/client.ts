@@ -493,7 +493,118 @@ export const api = {
     }),
   deleteOAuthClient: (clientId: string) =>
     fetchJson<{ success: boolean }>(`/api/oauth-clients/${clientId}`, { method: 'DELETE' }),
+
+  // Phase 2: Calendar, Reminders, Push Notifications & Delay Analysis
+  getCalendar: (startDate: string, endDate: string) => {
+    const qs = new URLSearchParams({ startDate, endDate });
+    return fetchJson<{ events: CalendarEventItem[]; total: number }>(`/api/calendar?${qs}`);
+  },
+  getCalendarConflicts: (startDate?: string, endDate?: string) => {
+    const qs = new URLSearchParams();
+    if (startDate) qs.set('startDate', startDate);
+    if (endDate) qs.set('endDate', endDate);
+    return fetchJson<{ conflicts: CalendarConflictItem[]; hasConflicts: boolean }>(`/api/calendar/conflicts?${qs}`);
+  },
+  getFreeSlots: (date: string, durationMinutes = 30) => {
+    const qs = new URLSearchParams({ date, durationMinutes: String(durationMinutes) });
+    return fetchJson<{ slots: FreeSlotItem[]; total: number }>(`/api/calendar/free-slots?${qs}`);
+  },
+  getReminders: (itemId?: string) => {
+    const qs = itemId ? `?itemId=${itemId}` : '';
+    return fetchJson<{ reminders: ReminderItem[] }>(`/api/reminders${qs}`);
+  },
+  setReminder: (data: { itemId: string; trigger: string; offsetMinutes?: number; triggerAt?: string; channels?: string[]; reason?: string }) =>
+    fetchJson<{ reminder: ReminderItem }>('/api/reminders', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  cancelReminder: (id: string, reason?: string) =>
+    fetchJson<{ cancelled: boolean }>(`/api/reminders/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ reason }),
+    }),
+  getNotificationPreferences: () =>
+    fetchJson<NotificationPreferences>('/api/notifications/preferences'),
+  updateNotificationPreferences: (data: Partial<NotificationPreferences>) =>
+    fetchJson<{ updated: boolean }>('/api/notifications/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  getVapidPublicKey: () =>
+    fetchJson<{ publicKey: string }>('/api/push/vapid-key'),
+  subscribePush: (subscription: unknown, userAgent?: string) =>
+    fetchJson<{ success: boolean }>('/api/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ subscription, userAgent }),
+    }),
+  unsubscribePush: (endpoint: string) =>
+    fetchJson<{ success: boolean }>('/api/push/unsubscribe', {
+      method: 'POST',
+      body: JSON.stringify({ endpoint }),
+    }),
+  explainDelay: (taskId: string) =>
+    fetchJson<ExplainDelayResult>(`/api/items/${taskId}/explain-delay`),
 };
+
+export interface CalendarEventItem {
+  id: string;
+  title: string;
+  startAt: string;
+  endAt: string;
+  dueAt: string | null;
+  rrule: string | null;
+  status: 'confirmed' | 'tentative' | 'cancelled';
+  priority: 'critical' | 'high' | 'medium' | 'low' | 'none';
+  tz: string;
+  parentId: string | null;
+  parentTitle: string | null;
+}
+
+export interface CalendarConflictItem {
+  eventA: { id: string; title: string; startAt: string; endAt: string };
+  eventB: { id: string; title: string; startAt: string; endAt: string };
+  overlapMinutes: number;
+}
+
+export interface FreeSlotItem {
+  startAt: string;
+  endAt: string;
+  durationMinutes: number;
+}
+
+export interface ReminderItem {
+  id: string;
+  itemId: string;
+  itemTitle: string;
+  trigger: string;
+  triggerAt: string;
+  state: 'pending' | 'sent' | 'failed' | 'cancelled';
+  channels: string[];
+}
+
+export interface NotificationPreferences {
+  channels: string[];
+  telegramChatId: string | null;
+  emailAddress: string | null;
+  quietHoursStart: string | null;
+  quietHoursEnd: string | null;
+  enabledTypes: string[];
+  webPushSubscriptions: number;
+}
+
+export interface ExplainDelayResult {
+  taskId: string;
+  title: string;
+  status: string;
+  dueAt: string | null;
+  isDelayed: boolean;
+  delayReason: string;
+  directBlockers: Array<{ id: string; reason: string; waitingOn: string | null; createdAt: string }>;
+  dependencies: Array<{ id: string; title: string; status: string; dueAt: string | null; isDelayed: boolean; relation: string }>;
+  rootCauses: string[];
+  recommendation: string;
+  summary: string;
+}
 
 export interface OAuthClientItem {
   id: string;

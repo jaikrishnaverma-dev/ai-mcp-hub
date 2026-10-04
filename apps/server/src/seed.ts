@@ -18,6 +18,8 @@ import { Decision } from './modules/decisions/model.js';
 import { Blocker } from './modules/blockers/model.js';
 import { Activity } from './modules/activity/model.js';
 import { Link } from './modules/links/model.js';
+import { Reminder } from './modules/notifications/model.js';
+import { NotificationPreference } from './modules/notifications/preferences-model.js';
 
 async function seed() {
   await connectDatabase();
@@ -32,6 +34,8 @@ async function seed() {
     Blocker.deleteMany({}),
     Activity.deleteMany({}),
     Link.deleteMany({}),
+    Reminder.deleteMany({}),
+    NotificationPreference.deleteMany({}),
   ]);
 
   // --- Create demo user ---
@@ -77,6 +81,40 @@ Be concise. Don't repeat information the user already knows. Focus on what's act
   });
 
   logger.info({ slug: endpoint.slug }, 'Daily Assistant endpoint created');
+
+  // --- Create Project Planner endpoint (Phase 2) ---
+  const plannerEndpoint = await Endpoint.create({
+    ownerId: userId,
+    name: 'Project Planner',
+    toolAllowlist: [
+      'get_daily_brief',
+      'create_task',
+      'update_task',
+      'complete_task',
+      'list_tasks',
+      'get_task',
+      'link_tasks',
+      'set_blocker',
+      'create_calendar_event',
+      'get_calendar_view',
+      'check_conflicts',
+      'find_free_slots',
+      'set_reminder',
+      'explain_delay',
+    ],
+    instructions: `You are Jai's Project Planner and Time Manager.
+You specialize in project scheduling, conflict detection, dependency analysis, and proactive alerts.
+
+Key workflows:
+1. When planning tasks and schedules, use get_calendar_view and check_conflicts to prevent double bookings.
+2. When scheduling appointments or focus blocks, use find_free_slots.
+3. When a task is stalled or missing deadlines, use explain_delay to pinpoint upstream blockers.
+4. Set reminders (set_reminder) for critical milestones.`,
+    scopes: ['read', 'write'],
+    status: 'active',
+  });
+
+  logger.info({ slug: plannerEndpoint.slug }, 'Project Planner endpoint created');
 
   // --- Create sample goal: Wedding Planning ---
   const wedding = await Item.create({
@@ -235,6 +273,39 @@ Be concise. Don't repeat information the user already knows. Focus on what's act
       reason: 'Visited all 5 venues over the weekend',
     },
   ]);
+
+  // --- Phase 2: Calendar Event (Recurring Weekly) ---
+  const calendarEvent = await Item.create({
+    type: 'event',
+    title: 'Weekly Wedding Planning Review',
+    body: 'Review open tasks, vendor quotes, and budget status with family.',
+    status: 'todo',
+    priority: 'high',
+    ownerId: userId,
+    parentId: wedding._id,
+    startAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+    endAt: new Date(Date.now() + 3 * 60 * 60 * 1000),
+    rrule: 'FREQ=WEEKLY;BYDAY=MO',
+    tz: 'Asia/Kolkata',
+  });
+
+  // --- Phase 2: Reminder ---
+  await Reminder.create({
+    ownerId: userId,
+    itemId: decorQuotes._id,
+    trigger: 'before_due',
+    offsetMinutes: 60,
+    triggerAt: new Date(Date.now() + 30 * 60 * 1000),
+    channels: ['web_push', 'telegram'],
+    state: 'pending',
+  });
+
+  // --- Phase 2: Notification Preferences ---
+  await NotificationPreference.create({
+    userId,
+    channels: ['web_push', 'telegram'],
+    enabledTypes: ['reminder', 'overdue', 'blocker_resolved', 'task_completed', 'conflict_detected'],
+  });
 
   logger.info({
     user: user.email,

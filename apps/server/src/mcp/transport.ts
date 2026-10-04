@@ -22,7 +22,7 @@ import type { Request, Response } from 'express';
 import { Endpoint } from '../modules/endpoints/model.js';
 import { oauthService } from '../modules/auth/oauth-service.js';
 import { toolRegistry } from './registry.js';
-import { registerP1Tools } from './tools.js';
+import { registerAllTools } from './tools.js';
 import { createModuleLogger } from '../config/index.js';
 import { ForbiddenError, AppError } from '../errors.js';
 import type { ServiceContext } from '@assistant/shared';
@@ -32,8 +32,8 @@ import { User } from '../modules/auth/model.js';
 
 const log = createModuleLogger('mcp');
 
-// Register all P1 tools at startup
-registerP1Tools();
+// Register all P1 and P2 tools at startup
+registerAllTools();
 
 /**
  * Handle an MCP request for a specific endpoint slug.

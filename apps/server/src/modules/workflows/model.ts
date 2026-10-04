@@ -88,7 +88,6 @@ const workflowSchema = new Schema<WorkflowDocument>(
 
 // Indexes
 workflowSchema.index({ ownerId: 1, status: 1 });
-workflowSchema.index({ slug: 1 }, { unique: true });
 
 export const Workflow: Model<WorkflowDocument> =
   mongoose.models['Endpoint'] ||

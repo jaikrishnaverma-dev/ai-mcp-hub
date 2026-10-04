@@ -15,6 +15,8 @@
 import mongoose from 'mongoose';
 import { Item } from '../items/model.js';
 import { Blocker } from '../blockers/model.js';
+import { Link } from '../links/model.js';
+import { NotFoundError } from '../../errors.js';
 import { createModuleLogger } from '../../config/index.js';
 import {
   DEFAULT_TIMEZONE,
@@ -22,6 +24,7 @@ import {
   type ServiceContext,
   type ItemSummary,
   type ItemPriority,
+  type ExplainDelayOutput,
 } from '@assistant/shared';
 
 const log = createModuleLogger('planner');
@@ -266,6 +269,189 @@ export const plannerService = {
       suggestedFocus: scored.map(s =>
         toSummary(s.doc as Record<string, unknown>, getParentTitle(s.doc as Record<string, unknown>)),
       ),
+      summary,
+    };
+  },
+
+  /**
+   * Explain delay for a task using dependency traversal and blocker lookup.
+   * Uses MongoDB $graphLookup on links to find all upstream blockers.
+   */
+  async explainDelay(
+    params: { taskId: string },
+    ctx: ServiceContext,
+  ): Promise<ExplainDelayOutput> {
+    const userId = new mongoose.Types.ObjectId(ctx.userId);
+    let taskObjectId: mongoose.Types.ObjectId;
+    try {
+      taskObjectId = new mongoose.Types.ObjectId(params.taskId);
+    } catch {
+      throw new NotFoundError('Task', params.taskId);
+    }
+
+    const task = await Item.findOne({
+      _id: taskObjectId,
+      ownerId: userId,
+      deletedAt: null,
+    }).lean();
+
+    if (!task) {
+      throw new NotFoundError('Task', params.taskId);
+    }
+
+    // Direct blockers
+    const directBlockers = await Blocker.find({
+      itemId: taskObjectId,
+      resolvedAt: null,
+    }).lean();
+
+    // Upstream dependency traversal via $graphLookup
+    // 1. depends_on links where this task is the source (fromId)
+    const dependsOnResults = await Link.aggregate([
+      { $match: { fromId: taskObjectId, kind: 'depends_on' } },
+      {
+        $graphLookup: {
+          from: 'links',
+          startWith: '$toId',
+          connectFromField: 'toId',
+          connectToField: 'fromId',
+          as: 'chain',
+          maxDepth: 20,
+          restrictSearchWithMatch: { kind: 'depends_on' },
+        },
+      },
+    ]);
+
+    // 2. blocks links targeting this task (toId)
+    const blocksResults = await Link.aggregate([
+      { $match: { toId: taskObjectId, kind: 'blocks' } },
+      {
+        $graphLookup: {
+          from: 'links',
+          startWith: '$fromId',
+          connectFromField: 'fromId',
+          connectToField: 'toId',
+          as: 'chain',
+          maxDepth: 20,
+          restrictSearchWithMatch: { kind: 'blocks' },
+        },
+      },
+    ]);
+
+    const upstreamIds = new Set<string>();
+    for (const r of dependsOnResults) {
+      upstreamIds.add(r['toId'].toString());
+      if (Array.isArray(r['chain'])) {
+        for (const c of r['chain']) {
+          upstreamIds.add(c['toId'].toString());
+        }
+      }
+    }
+    for (const r of blocksResults) {
+      upstreamIds.add(r['fromId'].toString());
+      if (Array.isArray(r['chain'])) {
+        for (const c of r['chain']) {
+          upstreamIds.add(c['fromId'].toString());
+        }
+      }
+    }
+
+    const upstreamObjectIds = Array.from(upstreamIds).map(id => new mongoose.Types.ObjectId(id));
+    const upstreamItems =
+      upstreamObjectIds.length > 0
+        ? await Item.find({ _id: { $in: upstreamObjectIds }, deletedAt: null }).lean()
+        : [];
+
+    const now = new Date();
+    const isTaskOverdue =
+      task.dueAt
+        ? new Date(task.dueAt) < now && task.status !== 'done' && task.status !== 'cancelled'
+        : false;
+    const isTaskBlocked = task.status === 'blocked' || directBlockers.length > 0;
+
+    const rootCauses: string[] = [];
+    if (isTaskOverdue) {
+      rootCauses.push(
+        `Task was due on ${new Date(task.dueAt!).toISOString().split('T')[0]} and is still ${task.status}.`,
+      );
+    }
+    for (const b of directBlockers) {
+      rootCauses.push(
+        `Direct blocker: ${b.reason}${b.waitingOnUserId ? ` (waiting on ${b.waitingOnUserId.toString()})` : ''}`,
+      );
+    }
+
+    const dependenciesList = upstreamItems.map(dep => {
+      const depDueAt = dep.dueAt ? new Date(dep.dueAt) : null;
+      const isDepOverdue = depDueAt ? depDueAt < now && dep.status !== 'done' : false;
+      const isDepBlocking = dep.status !== 'done' && dep.status !== 'cancelled';
+      if (isDepBlocking) {
+        rootCauses.push(
+          `Prerequisite task "${dep.title}" is ${dep.status}${isDepOverdue ? ' (OVERDUE)' : ''}.`,
+        );
+      }
+      return {
+        id: dep._id.toString(),
+        title: dep.title as string,
+        status: dep.status as string,
+        dueAt: depDueAt ? depDueAt.toISOString() : null,
+        isDelayed: isDepOverdue || dep.status === 'blocked',
+        relation: 'prerequisite',
+      };
+    });
+
+    const isDelayed =
+      isTaskOverdue ||
+      isTaskBlocked ||
+      dependenciesList.some(d => d.isDelayed || d.status !== 'done');
+
+    let delayReason = 'On track — no delays or blocking dependencies detected.';
+    if (isDelayed) {
+      if (isTaskBlocked) {
+        delayReason = `Task is directly blocked by ${directBlockers.length} blocker(s).`;
+      } else if (isTaskOverdue) {
+        delayReason = 'Task is overdue.';
+      } else {
+        delayReason = 'Task is waiting on unfinished prerequisite tasks.';
+      }
+    }
+
+    let recommendation = 'No action required; task is on track.';
+    if (directBlockers.length > 0) {
+      recommendation = `Resolve active blockers: ${directBlockers.map(b => `"${b.reason}"`).join('; ')}`;
+    } else if (dependenciesList.some(d => d.status !== 'done')) {
+      const unfinished = dependenciesList.filter(d => d.status !== 'done');
+      recommendation = `Complete prerequisite task(s) first: ${unfinished.map(u => `"${u.title}" (${u.status})`).join(', ')}`;
+    } else if (isTaskOverdue) {
+      recommendation = 'Task is overdue; re-estimate priority or reschedule due date.';
+    }
+
+    const summary = [
+      `📊 Delay Analysis for: "${task.title}" [${task.status}]`,
+      `Status: ${isDelayed ? '⚠️ DELAYED' : '✅ ON TRACK'}`,
+      `Reason: ${delayReason}`,
+      rootCauses.length > 0 ? `\nRoot causes:\n${rootCauses.map(r => `• ${r}`).join('\n')}` : '',
+      `\nRecommendation: ${recommendation}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    return {
+      taskId: task._id.toString(),
+      title: task.title as string,
+      status: task.status as string,
+      dueAt: task.dueAt ? new Date(task.dueAt).toISOString() : null,
+      isDelayed,
+      delayReason,
+      directBlockers: directBlockers.map(b => ({
+        id: b._id.toString(),
+        reason: b.reason,
+        waitingOn: b.waitingOnUserId ? b.waitingOnUserId.toString() : null,
+        createdAt: b.createdAt.toISOString(),
+      })),
+      dependencies: dependenciesList,
+      rootCauses,
+      recommendation,
       summary,
     };
   },

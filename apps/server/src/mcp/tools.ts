@@ -27,6 +27,15 @@ import {
   logDecisionInput,
   createLinkInput,
   setBlockerInput,
+  createEventInput,
+  getCalendarViewInput,
+  checkConflictsInput,
+  findFreeSlotsInput,
+  setReminderInput,
+  cancelReminderInput,
+  listRemindersInput,
+  updateNotificationPrefsInput,
+  explainDelayInput,
 } from '@assistant/shared';
 import { toolRegistry, type McpToolResult } from './registry.js';
 import { itemsService } from '../modules/items/service.js';
@@ -34,6 +43,8 @@ import { linksService } from '../modules/links/service.js';
 import { decisionsService } from '../modules/decisions/service.js';
 import { blockersService } from '../modules/blockers/service.js';
 import { plannerService } from '../modules/planner/service.js';
+import { calendarService } from '../modules/calendar/service.js';
+import { notificationsService } from '../modules/notifications/service.js';
 import { AppError } from '../errors.js';
 import type { ServiceContext } from '@assistant/shared';
 
@@ -339,4 +350,225 @@ export function registerP1Tools(): void {
       };
     }),
   });
+}
+
+/**
+ * Register all Phase 2 tools (Calendar, Notifications/Reminders, Dependency/Delay Analysis).
+ */
+export function registerP2Tools(): void {
+  // --- 11. create_calendar_event ---
+  toolRegistry.register({
+    name: 'create_calendar_event',
+    description:
+      'Schedule a calendar event or appointment with startAt, endAt, and optional recurrence (rrule). ' +
+      'Events appear on the calendar and daily brief. Provide a reason to explain why.',
+    inputSchema: zodToJsonSchema(createEventInput) as Record<string, unknown>,
+    requiredScope: 'write',
+    handler: wrapHandler(async (args, ctx) => {
+      const input = createEventInput.parse(args);
+      const result = await calendarService.createEvent(input, ctx);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              message: `Event "${result.event.title}" scheduled from ${result.event.startAt} to ${result.event.endAt}.`,
+              event: result.event,
+            }, null, 2),
+          },
+        ],
+      };
+    }),
+  });
+
+  // --- 12. get_calendar_view ---
+  toolRegistry.register({
+    name: 'get_calendar_view',
+    description:
+      'Get calendar events within a date range (startDate to endDate in ISO 8601). ' +
+      'Recurring events (RRULE) are automatically expanded into their individual occurrences.',
+    inputSchema: zodToJsonSchema(getCalendarViewInput) as Record<string, unknown>,
+    requiredScope: 'read',
+    handler: wrapHandler(async (args, ctx) => {
+      const input = getCalendarViewInput.parse(args);
+      const result = await calendarService.getCalendarView(input, ctx);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    }),
+  });
+
+  // --- 13. check_conflicts ---
+  toolRegistry.register({
+    name: 'check_conflicts',
+    description:
+      'Check for scheduling overlaps and time conflicts between calendar events. ' +
+      'Can check across a date window or for a specific event.',
+    inputSchema: zodToJsonSchema(checkConflictsInput) as Record<string, unknown>,
+    requiredScope: 'read',
+    handler: wrapHandler(async (args, ctx) => {
+      const input = checkConflictsInput.parse(args);
+      const result = await calendarService.checkConflicts(input, ctx);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    }),
+  });
+
+  // --- 14. find_free_slots ---
+  toolRegistry.register({
+    name: 'find_free_slots',
+    description:
+      'Find available free time slots on a given date during working hours (default 9am - 6pm). ' +
+      'Specify desired duration in minutes (e.g., 30 or 60).',
+    inputSchema: zodToJsonSchema(findFreeSlotsInput) as Record<string, unknown>,
+    requiredScope: 'read',
+    handler: wrapHandler(async (args, ctx) => {
+      const input = findFreeSlotsInput.parse(args);
+      const result = await calendarService.findFreeSlots(input, ctx);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    }),
+  });
+
+  // --- 15. set_reminder ---
+  toolRegistry.register({
+    name: 'set_reminder',
+    description:
+      'Set an alert / reminder for an item (e.g. 15 minutes before due date, or at an exact datetime). ' +
+      'Dispatches via web push, telegram, and/or email.',
+    inputSchema: zodToJsonSchema(setReminderInput) as Record<string, unknown>,
+    requiredScope: 'write',
+    handler: wrapHandler(async (args, ctx) => {
+      const input = setReminderInput.parse(args);
+      const result = await notificationsService.setReminder(input, ctx);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              message: `Reminder set for "${result.reminder.itemTitle}" at ${result.reminder.triggerAt}.`,
+              reminder: result.reminder,
+            }, null, 2),
+          },
+        ],
+      };
+    }),
+  });
+
+  // --- 16. cancel_reminder ---
+  toolRegistry.register({
+    name: 'cancel_reminder',
+    description:
+      'Cancel an upcoming scheduled reminder by reminderId.',
+    inputSchema: zodToJsonSchema(cancelReminderInput) as Record<string, unknown>,
+    requiredScope: 'write',
+    handler: wrapHandler(async (args, ctx) => {
+      const input = cancelReminderInput.parse(args);
+      const result = await notificationsService.cancelReminder(input.reminderId, input.reason, ctx);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              message: `Reminder ${input.reminderId} cancelled.`,
+              cancelled: result.cancelled,
+            }, null, 2),
+          },
+        ],
+      };
+    }),
+  });
+
+  // --- 17. list_reminders ---
+  toolRegistry.register({
+    name: 'list_reminders',
+    description:
+      'List reminders, optionally filtered by itemId or state (pending, sent, failed, cancelled).',
+    inputSchema: zodToJsonSchema(listRemindersInput) as Record<string, unknown>,
+    requiredScope: 'read',
+    handler: wrapHandler(async (args, ctx) => {
+      const input = listRemindersInput.parse(args);
+      const result = await notificationsService.listReminders(input, ctx);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    }),
+  });
+
+  // --- 18. update_notification_preferences ---
+  toolRegistry.register({
+    name: 'update_notification_preferences',
+    description:
+      'Configure notification channels (web_push, telegram, email), quiet hours, and alert types.',
+    inputSchema: zodToJsonSchema(updateNotificationPrefsInput) as Record<string, unknown>,
+    requiredScope: 'write',
+    handler: wrapHandler(async (args, ctx) => {
+      const input = updateNotificationPrefsInput.parse(args);
+      await notificationsService.updatePreferences(input, ctx);
+      const prefs = await notificationsService.getPreferences(ctx);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              message: 'Notification preferences updated.',
+              preferences: prefs,
+            }, null, 2),
+          },
+        ],
+      };
+    }),
+  });
+
+  // --- 19. explain_delay ---
+  toolRegistry.register({
+    name: 'explain_delay',
+    description:
+      'Analyze why a task is delayed or blocked. Performs dependency graph traversal (using $graphLookup) ' +
+      'to pinpoint root-cause blockers, overdue prerequisites, and suggests actionable next steps.',
+    inputSchema: zodToJsonSchema(explainDelayInput) as Record<string, unknown>,
+    requiredScope: 'read',
+    handler: wrapHandler(async (args, ctx) => {
+      const input = explainDelayInput.parse(args);
+      const result = await plannerService.explainDelay(input, ctx);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    }),
+  });
+}
+
+/**
+ * Register all Phase 1 and Phase 2 tools.
+ */
+export function registerAllTools(): void {
+  registerP1Tools();
+  registerP2Tools();
 }
