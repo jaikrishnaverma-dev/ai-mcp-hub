@@ -275,8 +275,8 @@ describe('MCP Tools Quality Suite', () => {
 
       expect(result.isError).toBeFalsy();
       expect(result.content).toBeInstanceOf(Array);
-      expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('suggestedFocus');
+      expect(result.content[0]!.type).toBe('text');
+      expect(result.content[0]!.text).toContain('suggestedFocus');
     });
 
     it('create_task rejects invalid inputs and returns actionable error message', async () => {
@@ -285,7 +285,7 @@ describe('MCP Tools Quality Suite', () => {
       const result = await tool.handler({ description: 'No title' }, ctx);
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('VALIDATION_ERROR');
+      expect(result.content[0]!.text).toContain('VALIDATION_ERROR');
     });
 
     it('create_task executes with valid input and returns JSON payload with IDs', async () => {
@@ -293,8 +293,8 @@ describe('MCP Tools Quality Suite', () => {
       const result = await tool.handler({ title: 'New Test Task', priority: 'high' }, ctx);
 
       expect(result.isError).toBeFalsy();
-      expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('507f1f77bcf86cd799439011');
+      expect(result.content[0]!.type).toBe('text');
+      expect(result.content[0]!.text).toContain('507f1f77bcf86cd799439011');
     });
 
     it('update_task requires valid taskId and validates updates', async () => {
@@ -304,7 +304,7 @@ describe('MCP Tools Quality Suite', () => {
 
       const goodResult = await tool.handler({ taskId: '507f1f77bcf86cd799439011', status: 'in_progress' }, ctx);
       expect(goodResult.isError).toBeFalsy();
-      expect(goodResult.content[0].text).toContain('507f1f77bcf86cd799439011');
+      expect(goodResult.content[0]!.text).toContain('507f1f77bcf86cd799439011');
     });
 
     it('delete_task requires valid taskId and explanation', async () => {
@@ -312,7 +312,7 @@ describe('MCP Tools Quality Suite', () => {
       const result = await tool.handler({ taskId: '507f1f77bcf86cd799439011', reason: 'No longer needed' }, ctx);
 
       expect(result.isError).toBeFalsy();
-      expect(result.content[0].text).toContain('soft-deleted');
+      expect(result.content[0]!.text).toContain('soft-deleted');
     });
 
     it('set_blocker validates itemId and reason', async () => {
@@ -322,7 +322,7 @@ describe('MCP Tools Quality Suite', () => {
 
       const goodResult = await tool.handler({ itemId: '507f1f77bcf86cd799439011', reason: 'Waiting for vendor quote' }, ctx);
       expect(goodResult.isError).toBeFalsy();
-      expect(goodResult.content[0].text).toContain('blk-1');
+      expect(goodResult.content[0]!.text).toContain('blk-1');
     });
 
     it('create_calendar_event validates startAt and endAt ISO format', async () => {
@@ -339,7 +339,7 @@ describe('MCP Tools Quality Suite', () => {
         ctx,
       );
       expect(goodResult.isError).toBeFalsy();
-      expect(goodResult.content[0].text).toContain('ev-1');
+      expect(goodResult.content[0]!.text).toContain('ev-1');
     });
 
     it('check_conflicts and find_free_slots return structured scheduling data', async () => {
@@ -349,7 +349,7 @@ describe('MCP Tools Quality Suite', () => {
         ctx,
       );
       expect(conflictResult.isError).toBeFalsy();
-      expect(conflictResult.content[0].text).toContain('hasConflict');
+      expect(conflictResult.content[0]!.text).toContain('hasConflict');
 
       const freeSlotsTool = toolRegistry.get('find_free_slots')!;
       const freeSlotsResult = await freeSlotsTool.handler(
@@ -357,7 +357,7 @@ describe('MCP Tools Quality Suite', () => {
         ctx,
       );
       expect(freeSlotsResult.isError).toBeFalsy();
-      expect(freeSlotsResult.content[0].text).toContain('freeSlots');
+      expect(freeSlotsResult.content[0]!.text).toContain('freeSlots');
     });
 
     it('set_reminder validates channels and scheduled time', async () => {
@@ -372,7 +372,7 @@ describe('MCP Tools Quality Suite', () => {
         ctx,
       );
       expect(result.isError).toBeFalsy();
-      expect(result.content[0].text).toContain('rem-1');
+      expect(result.content[0]!.text).toContain('rem-1');
     });
 
     it('explain_delay performs graph dependency analysis and returns delay breakdown', async () => {
@@ -380,8 +380,8 @@ describe('MCP Tools Quality Suite', () => {
       const result = await tool.handler({ taskId: '507f1f77bcf86cd799439011' }, ctx);
 
       expect(result.isError).toBeFalsy();
-      expect(result.content[0].text).toContain('507f1f77bcf86cd799439011');
-      expect(result.content[0].text).toContain('Critical Task');
+      expect(result.content[0]!.text).toContain('507f1f77bcf86cd799439011');
+      expect(result.content[0]!.text).toContain('Critical Task');
     });
   });
 });

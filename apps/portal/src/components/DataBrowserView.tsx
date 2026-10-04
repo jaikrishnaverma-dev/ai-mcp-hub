@@ -28,6 +28,7 @@ import {
   FileText,
   Info,
   Link2,
+  MoreVertical,
 } from 'lucide-react';
 import { Button } from './ui/button.js';
 import { StatusBadge, PriorityBadge, getStatusCardClass, getStatusTickerClass } from './ui/badge.js';
@@ -35,6 +36,12 @@ import { cn } from '@/lib/utils.js';
 import { Input } from './ui/input.js';
 import { Label } from './ui/label.js';
 import { Skeleton } from './ui/skeleton.js';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu.js';
 import {
   Dialog,
   DialogContent,
@@ -672,12 +679,12 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                         )}
                       >
                         {/* 1. GOAL LEVEL HEADER */}
-                        <div className="p-3.5 sm:p-4 bg-zinc-50/80 dark:bg-zinc-800/40 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                        <div className="p-3 sm:p-4 bg-zinc-50/80 dark:bg-zinc-800/40 border-b border-zinc-100 dark:border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+                          <div className="flex items-start sm:items-center gap-2 sm:gap-3 min-w-0 flex-1">
                             <button
                               type="button"
                               onClick={() => toggleGoalCollapse(gt.goal.id)}
-                              className="p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+                              className="p-1 mt-0.5 sm:mt-0 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer shrink-0"
                               title={isGoalCollapsed ? 'Expand Goal' : 'Collapse Goal'}
                             >
                               {isGoalCollapsed ? (
@@ -689,7 +696,7 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
 
                             <div
                               onClick={() => openItemDetail(gt.goal)}
-                              className="h-8 px-2 rounded-lg bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/60 font-mono font-bold text-xs flex items-center justify-center shrink-0 select-none shadow-2xs cursor-pointer hover:scale-105 transition-transform"
+                              className="h-7 px-2 sm:h-8 rounded-lg bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/60 font-mono font-bold text-[11px] sm:text-xs flex items-center justify-center shrink-0 select-none shadow-2xs cursor-pointer hover:scale-105 transition-transform"
                               title="Click to view Goal details"
                             >
                               GOL
@@ -697,29 +704,77 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
 
                             <div
                               onClick={() => openItemDetail(gt.goal)}
-                              className="min-w-0 flex-1 truncate space-y-0.5 cursor-pointer group/goal"
+                              className="min-w-0 flex-1 space-y-1 cursor-pointer group/goal"
                               title="Click to view Goal details"
                             >
-                              <div className="flex items-center gap-2">
-                                <h3 className={`text-sm sm:text-base font-bold truncate group-hover/goal:text-purple-600 dark:group-hover/goal:text-purple-400 group-hover/goal:underline transition-colors ${
+                              <div className="flex items-center justify-between sm:justify-start gap-2">
+                                <h3 className={`text-sm sm:text-base font-bold line-clamp-2 sm:truncate break-words group-hover/goal:text-purple-600 dark:group-hover/goal:text-purple-400 transition-colors ${
                                   isGoalDone || isGoalCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-50'
                                 }`}>
                                   {gt.goal.title}
                                 </h3>
-                                <span className="rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 px-2 py-0.2 text-[10px] font-semibold border border-purple-200/60 dark:border-purple-800/40 uppercase hidden sm:inline-block">
+                                <span className="rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 px-2 py-0.2 text-[10px] font-semibold border border-purple-200/60 dark:border-purple-800/40 uppercase hidden sm:inline-block shrink-0">
                                   Goal
                                 </span>
+
+                                {/* Mobile top-right quick actions */}
+                                <div className="sm:hidden flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    onClick={() => handleToggleComplete(gt.goal)}
+                                    className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                      isGoalDone
+                                        ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40'
+                                        : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300'
+                                    }`}
+                                    title={isGoalDone ? 'Mark as incomplete' : 'Mark as complete'}
+                                  >
+                                    <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                                  </button>
+
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center">
+                                        <MoreVertical className="h-3.5 w-3.5" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-44 rounded-xl">
+                                      <DropdownMenuItem onClick={() => openAddModal('story', gt.goal.id)}>
+                                        <Plus className="mr-2 h-3.5 w-3.5" />
+                                        <span>Add Story</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleToggleCancel(gt.goal)}>
+                                        <XCircle className="mr-2 h-3.5 w-3.5" />
+                                        <span>{isGoalCancelled ? 'Reopen Goal' : 'Cancel Goal'}</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => promptDeleteItem({ id: gt.goal.id, title: gt.goal.title, type: 'goal' })}
+                                        className="text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/40"
+                                      >
+                                        <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                        <span>Delete Goal</span>
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
+
+                              <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
+                                <StatusBadge status={gt.goal.status} className="inline-flex shrink-0 py-0 px-2 text-[10px]" />
+                                <span>·</span>
                                 <span>{gt.stories.length} {gt.stories.length === 1 ? 'STORY' : 'STORIES'} · {gt.totalTasks} TASKS</span>
                                 <span>·</span>
                                 <PriorityBadge priority={gt.goal.priority} />
+                                {gt.totalTasks > 0 && (
+                                  <span className="rounded-full bg-zinc-200/70 dark:bg-zinc-800 px-2 py-0.2 text-[10px] font-semibold font-mono text-zinc-700 dark:text-zinc-300">
+                                    {gt.doneTasks}/{gt.totalTasks} Done
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
 
-                          {/* Goal Right Actions & Metrics */}
-                          <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {/* Goal Desktop Actions */}
+                          <div className="hidden sm:flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                             {gt.totalTasks > 0 && (
                               <span className="rounded-full bg-zinc-200/70 dark:bg-zinc-800 px-2.5 py-0.5 text-[10px] font-semibold font-mono text-zinc-700 dark:text-zinc-300 hidden md:inline-block">
                                 {gt.doneTasks}/{gt.totalTasks} Done
@@ -765,10 +820,7 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
 
                             <button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                promptDeleteItem({ id: gt.goal.id, title: gt.goal.title, type: 'goal' });
-                              }}
+                              onClick={() => promptDeleteItem({ id: gt.goal.id, title: gt.goal.title, type: 'goal' })}
                               className="h-8 w-8 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer"
                               title="Delete goal"
                             >
@@ -805,12 +857,12 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                     )}
                                   >
                                     {/* STORY HEADER */}
-                                    <div className="flex items-center justify-between gap-2.5">
-                                      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-2.5">
+                                      <div className="flex items-start sm:items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
                                         <button
                                           type="button"
                                           onClick={() => toggleStoryCollapse(st.story.id)}
-                                          className="p-0.5 rounded text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+                                          className="p-0.5 mt-0.5 sm:mt-0 rounded text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer shrink-0"
                                           title={isStoryCollapsed ? 'Expand Story' : 'Collapse Story'}
                                         >
                                           {isStoryCollapsed ? (
@@ -830,20 +882,63 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
 
                                         <div
                                           onClick={() => openItemDetail(st.story)}
-                                          className="min-w-0 flex-1 truncate space-y-0.5 cursor-pointer group/story"
+                                          className="min-w-0 flex-1 space-y-1 cursor-pointer group/story"
                                           title="Click to view Story details"
                                         >
-                                          <div className="flex items-center gap-1.5">
-                                            <h4 className={`text-xs sm:text-sm font-semibold truncate group-hover/story:text-sky-600 dark:group-hover/story:text-sky-400 group-hover/story:underline transition-colors ${
+                                          <div className="flex items-center justify-between sm:justify-start gap-2">
+                                            <h4 className={`text-xs sm:text-sm font-semibold line-clamp-2 sm:truncate break-words group-hover/story:text-sky-600 dark:group-hover/story:text-sky-400 transition-colors ${
                                               isStoryDone || isStoryCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
                                             }`}>
                                               {st.story.title}
                                             </h4>
-                                            <span className="rounded bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 px-1.5 py-0.2 text-[9px] font-semibold border border-sky-200/50 dark:border-sky-800/40 uppercase hidden sm:inline-block">
+                                            <span className="rounded bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 px-1.5 py-0.2 text-[9px] font-semibold border border-sky-200/50 dark:border-sky-800/40 uppercase hidden sm:inline-block shrink-0">
                                               Story
                                             </span>
+
+                                            {/* Mobile quick actions for Story */}
+                                            <div className="sm:hidden flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                              <button
+                                                onClick={() => handleToggleComplete(st.story)}
+                                                className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                                  isStoryDone
+                                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40'
+                                                    : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600'
+                                                }`}
+                                                title={isStoryDone ? 'Mark as incomplete' : 'Mark as complete'}
+                                              >
+                                                <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                                              </button>
+
+                                              <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                  <button className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center">
+                                                    <MoreVertical className="h-3.5 w-3.5" />
+                                                  </button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                                                  <DropdownMenuItem onClick={() => openAddModal('task', st.story.id)}>
+                                                    <Plus className="mr-2 h-3.5 w-3.5" />
+                                                    <span>Add Task</span>
+                                                  </DropdownMenuItem>
+                                                  <DropdownMenuItem onClick={() => handleToggleCancel(st.story)}>
+                                                    <XCircle className="mr-2 h-3.5 w-3.5" />
+                                                    <span>{isStoryCancelled ? 'Reopen Story' : 'Cancel Story'}</span>
+                                                  </DropdownMenuItem>
+                                                  <DropdownMenuItem
+                                                    onClick={() => promptDeleteItem({ id: st.story.id, title: st.story.title, type: 'story' })}
+                                                    className="text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/40"
+                                                  >
+                                                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                                    <span>Delete Story</span>
+                                                  </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                              </DropdownMenu>
+                                            </div>
                                           </div>
-                                          <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
+
+                                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500">
+                                            <StatusBadge status={st.story.status} className="inline-flex shrink-0 py-0 px-1.5 text-[9px]" />
+                                            <span>·</span>
                                             <span>{st.tasks.length} {st.tasks.length === 1 ? 'TASK' : 'TASKS'}</span>
                                             <span>·</span>
                                             <PriorityBadge priority={st.story.priority} />
@@ -851,8 +946,8 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                         </div>
                                       </div>
 
-                                      {/* Story Actions */}
-                                      <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                      {/* Desktop Story Actions */}
+                                      <div className="hidden sm:flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                                         <StatusBadge status={st.story.status} className="inline-flex shrink-0" />
 
                                         <Button
@@ -863,7 +958,7 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                           title="Add Task under this Story"
                                         >
                                           <Plus className="h-3 w-3" />
-                                          <span className="hidden sm:inline">Add Task</span>
+                                          <span>Add Task</span>
                                         </Button>
 
                                         <button
@@ -871,7 +966,7 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                           className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
                                             isStoryDone
                                               ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40'
-                                              : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800'
+                                              : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600'
                                           }`}
                                           title={isStoryDone ? 'Mark as incomplete' : 'Mark as complete'}
                                         >
@@ -883,7 +978,7 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                           className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
                                             isStoryCancelled
                                               ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
-                                              : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'
+                                              : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600'
                                           }`}
                                           title={isStoryCancelled ? 'Re-open story' : 'Cancel story'}
                                         >
@@ -892,11 +987,8 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
 
                                         <button
                                           type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            promptDeleteItem({ id: st.story.id, title: st.story.title, type: 'story' });
-                                          }}
-                                          className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer"
+                                          onClick={() => promptDeleteItem({ id: st.story.id, title: st.story.title, type: 'story' })}
+                                          className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 flex items-center justify-center transition-colors cursor-pointer"
                                           title="Delete story"
                                         >
                                           <Trash2 className="h-3 w-3" />
@@ -906,7 +998,7 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
 
                                     {/* 3. TASK LEVEL ROWS (Indented under Story) */}
                                     {!isStoryCollapsed && (
-                                      <div className="pl-3 sm:pl-4 border-l-2 border-sky-200/70 dark:border-sky-900/50 ml-2.5 sm:ml-3 space-y-1.5 pt-1">
+                                      <div className="pl-2 sm:pl-3.5 border-l-2 border-sky-300/80 dark:border-sky-800/60 ml-1 sm:ml-2.5 space-y-1.5 pt-1">
                                         {st.tasks.length === 0 ? (
                                           <div className="text-[11px] text-zinc-400 italic py-1">
                                             No tasks yet.{' '}
@@ -927,77 +1019,103 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                                 key={t.id}
                                                 onClick={() => openItemDetail(t)}
                                                 className={cn(
-                                                  'flex items-center justify-between p-2.5 sm:p-3 rounded-xl border transition-all gap-2.5 shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600',
+                                                  'p-2 sm:p-2.5 rounded-xl border transition-all shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600 space-y-1',
                                                   getStatusCardClass(t.status)
                                                 )}
                                                 title="Click to view Task details"
                                               >
-                                                {/* Left: TSK badge */}
-                                                <div className={cn(
-                                                  'h-7 w-7 sm:h-8 sm:w-8 rounded-lg border flex items-center justify-center font-mono font-bold text-[10px] shadow-2xs shrink-0 select-none',
-                                                  getStatusTickerClass(t.status)
-                                                )}>
-                                                  TSK
-                                                </div>
+                                                {/* Top row: TSK badge + Full readable Title + Actions */}
+                                                <div className="flex items-start justify-between gap-2">
+                                                  <div className="flex items-start gap-1.5 sm:gap-2 min-w-0 flex-1">
+                                                    <div className={cn(
+                                                      'h-6 w-6 sm:h-7 sm:w-7 rounded-md border flex items-center justify-center font-mono font-bold text-[9px] sm:text-[10px] shadow-2xs shrink-0 select-none mt-0.5',
+                                                      getStatusTickerClass(t.status)
+                                                    )}>
+                                                      TSK
+                                                    </div>
 
-                                                {/* Middle: Title & Metadata */}
-                                                <div className="space-y-0.5 min-w-0 flex-1 truncate">
-                                                  <h5 className={`text-xs sm:text-sm font-semibold truncate hover:underline ${
-                                                    isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
-                                                  }`}>
-                                                    {t.title}
-                                                  </h5>
-                                                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
-                                                    <PriorityBadge priority={t.priority} />
-                                                    <span>·</span>
-                                                    <span>{new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</span>
+                                                    <h5 className={`text-xs sm:text-sm font-semibold leading-snug line-clamp-2 sm:truncate break-words hover:underline ${
+                                                      isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+                                                    }`}>
+                                                      {t.title}
+                                                    </h5>
                                                   </div>
-                                                </div>
 
-                                                {/* Right: Pill Badge + Actions */}
-                                                <div
-                                                  className="flex items-center gap-1.5 sm:gap-2 shrink-0"
-                                                  onClick={(e) => e.stopPropagation()}
-                                                >
-                                                  <StatusBadge status={t.status} className="inline-flex shrink-0" />
-
-                                                  <div className="flex items-center gap-1">
+                                                  {/* Actions: On mobile, Quick Complete + Overflow Menu */}
+                                                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                                                     <button
                                                       onClick={() => handleToggleComplete(t)}
-                                                      className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                                      className={`h-6 w-6 sm:h-7 sm:w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
                                                         isDone
                                                           ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40'
-                                                          : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800'
+                                                          : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600'
                                                       }`}
                                                       title={isDone ? 'Mark as incomplete' : 'Mark as complete'}
                                                     >
                                                       <Check className="h-3.5 w-3.5 stroke-[2.5]" />
                                                     </button>
 
-                                                    <button
-                                                      onClick={() => handleToggleCancel(t)}
-                                                      className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
-                                                        isCancelled
-                                                          ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
-                                                          : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'
-                                                      }`}
-                                                      title={isCancelled ? 'Re-open task' : 'Cancel task'}
-                                                    >
-                                                      <XCircle className="h-3.5 w-3.5" />
-                                                    </button>
+                                                    {/* Mobile overflow */}
+                                                    <div className="sm:hidden">
+                                                      <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                          <button className="h-6 w-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-zinc-700 flex items-center justify-center">
+                                                            <MoreVertical className="h-3 w-3" />
+                                                          </button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="w-36 rounded-xl">
+                                                          <DropdownMenuItem onClick={() => handleToggleCancel(t)}>
+                                                            <XCircle className="mr-2 h-3.5 w-3.5" />
+                                                            <span>{isCancelled ? 'Reopen' : 'Cancel'}</span>
+                                                          </DropdownMenuItem>
+                                                          <DropdownMenuItem
+                                                            onClick={() => promptDeleteItem({ id: t.id, title: t.title, type: 'task' })}
+                                                            className="text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50"
+                                                          >
+                                                            <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                                            <span>Delete</span>
+                                                          </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                      </DropdownMenu>
+                                                    </div>
 
-                                                    <button
-                                                      type="button"
-                                                      onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        promptDeleteItem({ id: t.id, title: t.title, type: 'task' });
-                                                      }}
-                                                      className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer"
-                                                      title="Delete task"
-                                                    >
-                                                      <Trash2 className="h-3 w-3" />
-                                                    </button>
+                                                    {/* Desktop inline buttons */}
+                                                    <div className="hidden sm:flex items-center gap-1">
+                                                      <button
+                                                        onClick={() => handleToggleCancel(t)}
+                                                        className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                                          isCancelled
+                                                            ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
+                                                            : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600'
+                                                        }`}
+                                                        title={isCancelled ? 'Re-open task' : 'Cancel task'}
+                                                      >
+                                                        <XCircle className="h-3.5 w-3.5" />
+                                                      </button>
+
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => promptDeleteItem({ id: t.id, title: t.title, type: 'task' })}
+                                                        className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 flex items-center justify-center transition-colors cursor-pointer"
+                                                        title="Delete task"
+                                                      >
+                                                        <Trash2 className="h-3 w-3" />
+                                                      </button>
+                                                    </div>
                                                   </div>
+                                                </div>
+
+                                                {/* Bottom row: Status & Priority badges */}
+                                                <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 pl-7 sm:pl-9">
+                                                  <StatusBadge status={t.status} className="py-0 px-1.5 text-[9px]" />
+                                                  <span>·</span>
+                                                  <PriorityBadge priority={t.priority} />
+                                                  {t.dueAt && (
+                                                    <>
+                                                      <span>·</span>
+                                                      <span className="text-zinc-600 dark:text-zinc-400">Due {new Date(t.dueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                                    </>
+                                                  )}
                                                 </div>
                                               </div>
                                             );
@@ -1024,42 +1142,97 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                       key={t.id}
                                       onClick={() => openItemDetail(t)}
                                       className={cn(
-                                        'flex items-center justify-between p-2.5 sm:p-3 rounded-xl border transition-all gap-2.5 shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600',
+                                        'p-2.5 sm:p-3 rounded-xl border transition-all shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600 space-y-1.5',
                                         getStatusCardClass(t.status)
                                       )}
                                       title="Click to view Task details"
                                     >
-                                      <div className={cn(
-                                        'h-7 w-7 sm:h-8 sm:w-8 rounded-lg border flex items-center justify-center font-mono font-bold text-[10px] shadow-2xs shrink-0 select-none',
-                                        getStatusTickerClass(t.status)
-                                      )}>
-                                        TSK
-                                      </div>
-                                      <div className="space-y-0.5 min-w-0 flex-1 truncate">
-                                        <h5 className={`text-xs sm:text-sm font-semibold truncate hover:underline ${
-                                          isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
-                                        }`}>
-                                          {t.title}
-                                        </h5>
-                                        <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
-                                          <PriorityBadge priority={t.priority} />
-                                          <span>·</span>
-                                          <span>{new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</span>
+                                      {/* Top row: TSK badge + Full readable Title + Actions */}
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-start gap-2 min-w-0 flex-1">
+                                          <div className={cn(
+                                            'h-7 w-7 sm:h-8 sm:w-8 rounded-lg border flex items-center justify-center font-mono font-bold text-[10px] shadow-2xs shrink-0 select-none mt-0.5',
+                                            getStatusTickerClass(t.status)
+                                          )}>
+                                            TSK
+                                          </div>
+                                          <h5 className={`text-xs sm:text-sm font-semibold leading-snug line-clamp-2 sm:truncate break-words hover:underline ${
+                                            isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+                                          }`}>
+                                            {t.title}
+                                          </h5>
                                         </div>
-                                      </div>
-                                      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                        <StatusBadge status={t.status} className="inline-flex shrink-0" />
-                                        <div className="flex items-center gap-1">
-                                          <button onClick={() => handleToggleComplete(t)} className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${isDone ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800'}`}>
+
+                                        {/* Actions: Quick complete + mobile dropdown or desktop inline */}
+                                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                          <button
+                                            onClick={() => handleToggleComplete(t)}
+                                            className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                              isDone
+                                                ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40'
+                                                : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300'
+                                            }`}
+                                            title={isDone ? 'Mark as incomplete' : 'Mark as complete'}
+                                          >
                                             <Check className="h-3.5 w-3.5 stroke-[2.5]" />
                                           </button>
-                                          <button onClick={() => handleToggleCancel(t)} className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${isCancelled ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'}`}>
-                                            <XCircle className="h-3.5 w-3.5" />
-                                          </button>
-                                          <button type="button" onClick={() => promptDeleteItem({ id: t.id, title: t.title, type: 'task' })} className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer">
-                                            <Trash2 className="h-3 w-3" />
-                                          </button>
+
+                                          {/* Mobile overflow */}
+                                          <div className="sm:hidden">
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <button className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-zinc-700 flex items-center justify-center">
+                                                  <MoreVertical className="h-3.5 w-3.5" />
+                                                </button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end" className="w-36 rounded-xl">
+                                                <DropdownMenuItem onClick={() => handleToggleCancel(t)}>
+                                                  <XCircle className="mr-2 h-3.5 w-3.5" />
+                                                  <span>{isCancelled ? 'Reopen' : 'Cancel'}</span>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                  onClick={() => promptDeleteItem({ id: t.id, title: t.title, type: 'task' })}
+                                                  className="text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50"
+                                                >
+                                                  <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                                  <span>Delete</span>
+                                                </DropdownMenuItem>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </div>
+
+                                          {/* Desktop inline buttons */}
+                                          <div className="hidden sm:flex items-center gap-1">
+                                            <button
+                                              onClick={() => handleToggleCancel(t)}
+                                              className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                                isCancelled
+                                                  ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
+                                                  : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300'
+                                              }`}
+                                              title={isCancelled ? 'Re-open task' : 'Cancel task'}
+                                            >
+                                              <XCircle className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => promptDeleteItem({ id: t.id, title: t.title, type: 'task' })}
+                                              className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center transition-colors cursor-pointer"
+                                              title="Delete task"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </button>
+                                          </div>
                                         </div>
+                                      </div>
+
+                                      {/* Bottom row: Status & Priority badges */}
+                                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 pl-9 sm:pl-10">
+                                        <StatusBadge status={t.status} className="py-0 px-1.5 text-[9px]" />
+                                        <span>·</span>
+                                        <PriorityBadge priority={t.priority} />
+                                        <span>·</span>
+                                        <span>{new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                                       </div>
                                     </div>
                                   );
@@ -1085,51 +1258,102 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                           <div
                             key={st.story.id}
                             className={cn(
-                              'rounded-xl border p-3.5 space-y-2.5 transition-all shadow-2xs',
+                              'rounded-xl border p-3 sm:p-3.5 space-y-2 transition-all shadow-2xs',
                               getStatusCardClass(st.story.status)
                             )}
                           >
-                            <div className="flex items-center justify-between gap-2.5">
-                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <div
-                                  onClick={() => openItemDetail(st.story)}
-                                  className="h-7 px-2 rounded-lg bg-sky-100 dark:bg-sky-950/80 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/60 font-mono font-bold text-[11px] flex items-center justify-center shrink-0 select-none shadow-2xs cursor-pointer hover:scale-105 transition-transform"
-                                  title="Click to view Story details"
-                                >
+                            {/* Top row: STY badge + Title + Actions */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div
+                                onClick={() => openItemDetail(st.story)}
+                                className="flex items-start gap-2 min-w-0 flex-1 cursor-pointer group/orphan"
+                                title="Click to view Story details"
+                              >
+                                <div className="h-6 sm:h-7 px-2 rounded-lg bg-sky-100 dark:bg-sky-950/80 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/60 font-mono font-bold text-[10px] sm:text-[11px] flex items-center justify-center shrink-0 select-none shadow-2xs mt-0.5">
                                   STY
                                 </div>
-                                <div
-                                  onClick={() => openItemDetail(st.story)}
-                                  className="min-w-0 flex-1 truncate space-y-0.5 cursor-pointer group/orphan"
-                                  title="Click to view Story details"
-                                >
-                                  <h4 className={`text-xs sm:text-sm font-semibold truncate group-hover/orphan:text-sky-600 dark:group-hover/orphan:text-sky-400 group-hover/orphan:underline transition-colors ${
-                                    isStoryDone || isStoryCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
-                                  }`}>
-                                    {st.story.title}
-                                  </h4>
-                                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
-                                    <span>{st.tasks.length} {st.tasks.length === 1 ? 'TASK' : 'TASKS'}</span>
-                                    <span>·</span>
-                                    <PriorityBadge priority={st.story.priority} />
-                                  </div>
-                                </div>
+                                <h4 className={`text-xs sm:text-sm font-semibold leading-snug line-clamp-2 sm:truncate break-words group-hover/orphan:text-sky-600 dark:group-hover/orphan:text-sky-400 group-hover/orphan:underline transition-colors ${
+                                  isStoryDone || isStoryCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+                                }`}>
+                                  {st.story.title}
+                                </h4>
                               </div>
-                              <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                <StatusBadge status={st.story.status} className="inline-flex shrink-0" />
-                                <button onClick={() => handleToggleComplete(st.story)} className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${isStoryDone ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800'}`}>
+
+                              {/* Actions */}
+                              <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={() => handleToggleComplete(st.story)}
+                                  className={`h-6 w-6 sm:h-7 sm:w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                    isStoryDone
+                                      ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40'
+                                      : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300'
+                                  }`}
+                                  title={isStoryDone ? 'Mark as incomplete' : 'Mark as complete'}
+                                >
                                   <Check className="h-3.5 w-3.5 stroke-[2.5]" />
                                 </button>
-                                <button onClick={() => handleToggleCancel(st.story)} className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${isStoryCancelled ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'}`}>
-                                  <XCircle className="h-3.5 w-3.5" />
-                                </button>
-                                <button type="button" onClick={() => promptDeleteItem({ id: st.story.id, title: st.story.title, type: 'story' })} className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer">
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
+
+                                {/* Mobile overflow */}
+                                <div className="sm:hidden">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button className="h-6 w-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-zinc-700 flex items-center justify-center">
+                                        <MoreVertical className="h-3 w-3" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-36 rounded-xl">
+                                      <DropdownMenuItem onClick={() => handleToggleCancel(st.story)}>
+                                        <XCircle className="mr-2 h-3.5 w-3.5" />
+                                        <span>{isStoryCancelled ? 'Reopen' : 'Cancel'}</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => promptDeleteItem({ id: st.story.id, title: st.story.title, type: 'story' })}
+                                        className="text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50"
+                                      >
+                                        <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                        <span>Delete</span>
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+
+                                {/* Desktop inline buttons */}
+                                <div className="hidden sm:flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleToggleCancel(st.story)}
+                                    className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                      isStoryCancelled
+                                        ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
+                                        : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300'
+                                    }`}
+                                    title={isStoryCancelled ? 'Re-open story' : 'Cancel story'}
+                                  >
+                                    <XCircle className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => promptDeleteItem({ id: st.story.id, title: st.story.title, type: 'story' })}
+                                    className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center transition-colors cursor-pointer"
+                                    title="Delete story"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </div>
                               </div>
                             </div>
+
+                            {/* Bottom row: Status & Metadata */}
+                            <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 pl-8 sm:pl-9">
+                              <StatusBadge status={st.story.status} className="py-0 px-1.5 text-[9px]" />
+                              <span>·</span>
+                              <span>{st.tasks.length} {st.tasks.length === 1 ? 'TASK' : 'TASKS'}</span>
+                              <span>·</span>
+                              <PriorityBadge priority={st.story.priority} />
+                            </div>
+
+                            {/* Nested child tasks under this orphan story */}
                             {st.tasks.length > 0 && (
-                              <div className="pl-3 sm:pl-4 border-l-2 border-sky-200/70 dark:border-sky-900/50 ml-2.5 sm:ml-3 space-y-1.5 pt-1">
+                              <div className="pl-2 sm:pl-3.5 border-l-2 border-sky-200/70 dark:border-sky-900/50 ml-2 space-y-1.5 pt-1.5">
                                 {st.tasks.map((t) => {
                                   const isDone = t.status === 'done';
                                   const isCancelled = t.status === 'cancelled';
@@ -1138,37 +1362,101 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                       key={t.id}
                                       onClick={() => openItemDetail(t)}
                                       className={cn(
-                                        'flex items-center justify-between p-2.5 sm:p-3 rounded-xl border transition-all gap-2.5 shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600',
+                                        'p-2 sm:p-2.5 rounded-xl border transition-all shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600 space-y-1',
                                         getStatusCardClass(t.status)
                                       )}
                                       title="Click to view Task details"
                                     >
-                                      <div className={cn('h-7 w-7 sm:h-8 sm:w-8 rounded-lg border flex items-center justify-center font-mono font-bold text-[10px] shadow-2xs shrink-0 select-none', getStatusTickerClass(t.status))}>
-                                        TSK
-                                      </div>
-                                      <div className="space-y-0.5 min-w-0 flex-1 truncate">
-                                        <h5 className={`text-xs sm:text-sm font-semibold truncate hover:underline ${isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'}`}>
-                                          {t.title}
-                                        </h5>
-                                        <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
-                                          <PriorityBadge priority={t.priority} />
-                                          <span>·</span>
-                                          <span>{new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</span>
+                                      {/* Top row: TSK badge + Full readable Title + Actions */}
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-start gap-1.5 sm:gap-2 min-w-0 flex-1">
+                                          <div className={cn(
+                                            'h-6 w-6 sm:h-7 sm:w-7 rounded-md border flex items-center justify-center font-mono font-bold text-[9px] sm:text-[10px] shadow-2xs shrink-0 select-none mt-0.5',
+                                            getStatusTickerClass(t.status)
+                                          )}>
+                                            TSK
+                                          </div>
+                                          <h5 className={`text-xs sm:text-sm font-semibold leading-snug line-clamp-2 sm:truncate break-words hover:underline ${
+                                            isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+                                          }`}>
+                                            {t.title}
+                                          </h5>
                                         </div>
-                                      </div>
-                                      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                        <StatusBadge status={t.status} className="inline-flex shrink-0" />
-                                        <div className="flex items-center gap-1">
-                                          <button onClick={() => handleToggleComplete(t)} className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${isDone ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800'}`}>
+
+                                        {/* Actions */}
+                                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                          <button
+                                            onClick={() => handleToggleComplete(t)}
+                                            className={`h-6 w-6 sm:h-7 sm:w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                              isDone
+                                                ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40'
+                                                : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600'
+                                            }`}
+                                            title={isDone ? 'Mark as incomplete' : 'Mark as complete'}
+                                          >
                                             <Check className="h-3.5 w-3.5 stroke-[2.5]" />
                                           </button>
-                                          <button onClick={() => handleToggleCancel(t)} className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${isCancelled ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'}`}>
-                                            <XCircle className="h-3.5 w-3.5" />
-                                          </button>
-                                          <button type="button" onClick={() => promptDeleteItem({ id: t.id, title: t.title, type: 'task' })} className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer">
-                                            <Trash2 className="h-3 w-3" />
-                                          </button>
+
+                                          {/* Mobile overflow */}
+                                          <div className="sm:hidden">
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <button className="h-6 w-6 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-zinc-700 flex items-center justify-center">
+                                                  <MoreVertical className="h-3 w-3" />
+                                                </button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end" className="w-36 rounded-xl">
+                                                <DropdownMenuItem onClick={() => handleToggleCancel(t)}>
+                                                  <XCircle className="mr-2 h-3.5 w-3.5" />
+                                                  <span>{isCancelled ? 'Reopen' : 'Cancel'}</span>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                  onClick={() => promptDeleteItem({ id: t.id, title: t.title, type: 'task' })}
+                                                  className="text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50"
+                                                >
+                                                  <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                                  <span>Delete</span>
+                                                </DropdownMenuItem>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </div>
+
+                                          {/* Desktop inline buttons */}
+                                          <div className="hidden sm:flex items-center gap-1">
+                                            <button
+                                              onClick={() => handleToggleCancel(t)}
+                                              className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                                isCancelled
+                                                  ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
+                                                  : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600'
+                                              }`}
+                                              title={isCancelled ? 'Re-open task' : 'Cancel task'}
+                                            >
+                                              <XCircle className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => promptDeleteItem({ id: t.id, title: t.title, type: 'task' })}
+                                              className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 flex items-center justify-center transition-colors cursor-pointer"
+                                              title="Delete task"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </button>
+                                          </div>
                                         </div>
+                                      </div>
+
+                                      {/* Bottom row: Status & Priority badges */}
+                                      <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 pl-7 sm:pl-9">
+                                        <StatusBadge status={t.status} className="py-0 px-1.5 text-[9px]" />
+                                        <span>·</span>
+                                        <PriorityBadge priority={t.priority} />
+                                        {t.dueAt && (
+                                          <>
+                                            <span>·</span>
+                                            <span className="text-zinc-600 dark:text-zinc-400">Due {new Date(t.dueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                          </>
+                                        )}
                                       </div>
                                     </div>
                                   );
@@ -1211,73 +1499,102 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                               key={t.id}
                               onClick={() => openItemDetail(t)}
                               className={cn(
-                                'flex items-center justify-between p-3 rounded-xl border transition-all gap-3 shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600',
+                                'p-2.5 sm:p-3 rounded-xl border transition-all shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600 space-y-1.5',
                                 getStatusCardClass(t.status)
                               )}
                               title="Click to view Task details"
                             >
-                              <div className={cn(
-                                'h-9 w-9 rounded-xl border flex items-center justify-center font-mono font-bold text-xs shadow-2xs shrink-0 select-none',
-                                getStatusTickerClass(t.status)
-                              )}>
-                                TSK
-                              </div>
-
-                              <div className="space-y-0.5 min-w-0 flex-1 truncate">
-                                <h4 className={`text-xs sm:text-sm font-semibold truncate hover:underline ${
-                                  isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
-                                }`}>
-                                  {t.title}
-                                </h4>
-                                <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
-                                  <span>STANDALONE TASK</span>
-                                  <span>·</span>
-                                  <PriorityBadge priority={t.priority} />
-                                  <span>·</span>
-                                  <span>{new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</span>
+                              {/* Top row: TSK badge + readable Title + Actions */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-start gap-2 min-w-0 flex-1">
+                                  <div className={cn(
+                                    'h-7 w-7 sm:h-8 sm:w-8 rounded-lg border flex items-center justify-center font-mono font-bold text-[10px] shadow-2xs shrink-0 select-none mt-0.5',
+                                    getStatusTickerClass(t.status)
+                                  )}>
+                                    TSK
+                                  </div>
+                                  <h4 className={`text-xs sm:text-sm font-semibold leading-snug line-clamp-2 sm:truncate break-words hover:underline ${
+                                    isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+                                  }`}>
+                                    {t.title}
+                                  </h4>
                                 </div>
-                              </div>
 
-                              <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                <StatusBadge status={t.status} className="inline-flex shrink-0" />
-
-                                <div className="flex items-center gap-1">
+                                {/* Actions: Quick complete + mobile dropdown or desktop inline */}
+                                <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                                   <button
                                     onClick={() => handleToggleComplete(t)}
-                                    className={`h-8 w-8 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                                    className={`h-7 w-7 sm:h-8 sm:w-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
                                       isDone
                                         ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40'
-                                        : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800'
+                                        : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300'
                                     }`}
                                     title={isDone ? 'Mark as incomplete' : 'Mark as complete'}
                                   >
                                     <Check className="h-4 w-4 stroke-[2.5]" />
                                   </button>
 
-                                  <button
-                                    onClick={() => handleToggleCancel(t)}
-                                    className={`h-8 w-8 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
-                                      isCancelled
-                                        ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
-                                        : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'
-                                    }`}
-                                    title={isCancelled ? 'Re-open task' : 'Cancel task'}
-                                  >
-                                    <XCircle className="h-4 w-4" />
-                                  </button>
+                                  {/* Mobile overflow */}
+                                  <div className="sm:hidden">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-zinc-700 flex items-center justify-center">
+                                          <MoreVertical className="h-3.5 w-3.5" />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-36 rounded-xl">
+                                        <DropdownMenuItem onClick={() => handleToggleCancel(t)}>
+                                          <XCircle className="mr-2 h-3.5 w-3.5" />
+                                          <span>{isCancelled ? 'Reopen' : 'Cancel'}</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() => promptDeleteItem({ id: t.id, title: t.title, type: 'task' })}
+                                          className="text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50"
+                                        >
+                                          <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                          <span>Delete</span>
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      promptDeleteItem({ id: t.id, title: t.title, type: 'task' });
-                                    }}
-                                    className="h-8 w-8 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer"
-                                    title="Delete task"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
+                                  {/* Desktop inline buttons */}
+                                  <div className="hidden sm:flex items-center gap-1">
+                                    <button
+                                      onClick={() => handleToggleCancel(t)}
+                                      className={`h-8 w-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                        isCancelled
+                                          ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
+                                          : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300'
+                                      }`}
+                                      title={isCancelled ? 'Re-open task' : 'Cancel task'}
+                                    >
+                                      <XCircle className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        promptDeleteItem({ id: t.id, title: t.title, type: 'task' });
+                                      }}
+                                      className="h-8 w-8 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center transition-colors cursor-pointer"
+                                      title="Delete task"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
+                              </div>
+
+                              {/* Bottom row: Status & Priority badges */}
+                              <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 pl-9 sm:pl-10">
+                                <StatusBadge status={t.status} className="py-0 px-1.5 text-[9px]" />
+                                <span>·</span>
+                                <span>STANDALONE TASK</span>
+                                <span>·</span>
+                                <PriorityBadge priority={t.priority} />
+                                <span>·</span>
+                                <span>{new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                               </div>
                             </div>
                           );
@@ -1329,43 +1646,33 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                       key={t.id}
                       onClick={() => openItemDetail(t)}
                       className={cn(
-                        'flex items-center justify-between p-3 sm:p-3.5 rounded-xl border transition-all gap-3 shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600',
+                        'p-2.5 sm:p-3.5 rounded-xl border transition-all shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600 space-y-1.5',
                         getStatusCardClass(t.status)
                       )}
                       title="Click to view details"
                     >
-                      <div className={cn(
-                        'h-10 w-10 sm:h-11 sm:w-11 rounded-xl border flex items-center justify-center font-mono font-bold text-xs shadow-2xs shrink-0 select-none',
-                        getStatusTickerClass(t.status)
-                      )}>
-                        {ticker}
-                      </div>
+                      {/* Top row: Ticker + readable Title + Actions */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2 min-w-0 flex-1">
+                          <div className={cn(
+                            'h-7 w-7 sm:h-9 sm:w-9 rounded-lg sm:rounded-xl border flex items-center justify-center font-mono font-bold text-[10px] sm:text-xs shadow-2xs shrink-0 select-none mt-0.5',
+                            getStatusTickerClass(t.status)
+                          )}>
+                            {ticker}
+                          </div>
 
-                      <div className="space-y-0.5 min-w-0 flex-1 truncate">
-                        <h4 className={`text-xs sm:text-sm font-semibold truncate hover:underline ${
-                          isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
-                        }`}>
-                          {t.title}
-                        </h4>
-                        <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
-                          {crumbs.length > 0 && (
-                            <span className="text-zinc-700 dark:text-zinc-300 font-semibold">
-                              {crumbs.join(' › ')} ·{' '}
-                            </span>
-                          )}
-                          <PriorityBadge priority={t.priority} />
-                          <span>·</span>
-                          <span>{new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</span>
+                          <h4 className={`text-xs sm:text-sm font-semibold leading-snug line-clamp-2 sm:truncate break-words hover:underline ${
+                            isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+                          }`}>
+                            {t.title}
+                          </h4>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-2 sm:gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <StatusBadge status={t.status} className="inline-flex shrink-0" />
-
-                        <div className="flex items-center gap-1">
+                        {/* Actions: Quick complete + mobile dropdown or desktop inline */}
+                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => handleToggleComplete(t)}
-                            className={`h-8 w-8 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                            className={`h-7 w-7 sm:h-8 sm:w-8 rounded-lg sm:rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
                               isDone
                                 ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40'
                                 : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800'
@@ -1375,30 +1682,74 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                             <Check className="h-4 w-4 stroke-[2.5]" />
                           </button>
 
-                          <button
-                            onClick={() => handleToggleCancel(t)}
-                            className={`h-8 w-8 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
-                              isCancelled
-                                ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
-                                : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'
-                            }`}
-                            title={isCancelled ? 'Re-open item' : 'Cancel item'}
-                          >
-                            <XCircle className="h-4 w-4 stroke-[2]" />
-                          </button>
+                          {/* Mobile overflow */}
+                          <div className="sm:hidden">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-zinc-700 flex items-center justify-center">
+                                  <MoreVertical className="h-3.5 w-3.5" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-36 rounded-xl">
+                                <DropdownMenuItem onClick={() => handleToggleCancel(t)}>
+                                  <XCircle className="mr-2 h-3.5 w-3.5" />
+                                  <span>{isCancelled ? 'Reopen' : 'Cancel'}</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => promptDeleteItem({ id: t.id, title: t.title, type: t.type || 'task' })}
+                                  className="text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50"
+                                >
+                                  <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                  <span>Delete</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
 
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              promptDeleteItem({ id: t.id, title: t.title, type: t.type || 'task' });
-                            }}
-                            className="h-8 w-8 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer"
-                            title="Delete item"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          {/* Desktop inline buttons */}
+                          <div className="hidden sm:flex items-center gap-1">
+                            <button
+                              onClick={() => handleToggleCancel(t)}
+                              className={`h-8 w-8 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                                isCancelled
+                                  ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
+                                  : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'
+                              }`}
+                              title={isCancelled ? 'Re-open item' : 'Cancel item'}
+                            >
+                              <XCircle className="h-4 w-4 stroke-[2]" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                promptDeleteItem({ id: t.id, title: t.title, type: t.type || 'task' });
+                              }}
+                              className="h-8 w-8 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer"
+                              title="Delete item"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
+                      </div>
+
+                      {/* Bottom row: Breadcrumbs + Status + Priority + Date */}
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] sm:text-[11px] font-mono text-zinc-400 dark:text-zinc-500 pl-9 sm:pl-11">
+                        <StatusBadge status={t.status} className="py-0 px-1.5 text-[9px]" />
+                        <span>·</span>
+                        {crumbs.length > 0 && (
+                          <>
+                            <span className="text-zinc-700 dark:text-zinc-300 font-semibold truncate max-w-[150px] sm:max-w-none">
+                              {crumbs.join(' › ')}
+                            </span>
+                            <span>·</span>
+                          </>
+                        )}
+                        <PriorityBadge priority={t.priority} />
+                        <span>·</span>
+                        <span>{new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</span>
                       </div>
                     </div>
                   );

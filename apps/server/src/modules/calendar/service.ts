@@ -11,7 +11,11 @@
  * All events are stored as Items with type='event' + startAt/endAt.
  */
 import mongoose from 'mongoose';
-import { RRule } from 'rrule';
+import rrulePkg from 'rrule';
+// Handle both CJS default export and ESM named export across Node ESM runtimes
+const RRule = (rrulePkg as unknown as { default?: { RRule?: typeof rrulePkg.RRule }; RRule?: typeof rrulePkg.RRule }).default?.RRule ||
+  (rrulePkg as unknown as { RRule?: typeof rrulePkg.RRule }).RRule ||
+  (rrulePkg as unknown as typeof rrulePkg.RRule);
 import { Item, type ItemDocument } from '../items/model.js';
 import { Activity } from '../activity/model.js';
 import { createModuleLogger } from '../../config/index.js';
