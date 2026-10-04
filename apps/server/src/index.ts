@@ -28,6 +28,11 @@ import './modules/blockers/model.js';
 import './modules/endpoints/model.js';
 import './modules/auth/model.js';
 import './modules/auth/oauth-model.js';
+// Phase 2 models
+import './modules/notifications/model.js';
+import './modules/notifications/preferences-model.js';
+import './modules/notifications/push-subscription-model.js';
+import './modules/notifications/notification-log-model.js';
 import { oauthRouter } from './modules/auth/oauth-routes.js';
 
 const PORT = parseInt(process.env['PORT'] || '3000', 10);

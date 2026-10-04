@@ -57,12 +57,30 @@ export const ENDPOINT_STATUSES = ['active', 'revoked'] as const;
 export type EndpointStatus = (typeof ENDPOINT_STATUSES)[number];
 
 // --- Notification Channels (P2) ---
-export const NOTIFICATION_CHANNELS = ['telegram', 'email', 'whatsapp'] as const;
+export const NOTIFICATION_CHANNELS = ['web_push', 'telegram', 'email'] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
 // --- Reminder States (P2) ---
 export const REMINDER_STATES = ['pending', 'sent', 'failed', 'cancelled'] as const;
 export type ReminderState = (typeof REMINDER_STATES)[number];
+
+// --- Reminder Trigger Types (P2) ---
+export const REMINDER_TRIGGERS = ['before_due', 'before_start', 'at_time', 'overdue'] as const;
+export type ReminderTrigger = (typeof REMINDER_TRIGGERS)[number];
+
+// --- Calendar Event Statuses (P2) ---
+export const CALENDAR_EVENT_STATUSES = ['confirmed', 'tentative', 'cancelled'] as const;
+export type CalendarEventStatus = (typeof CALENDAR_EVENT_STATUSES)[number];
+
+// --- Notification Types (P2) ---
+export const NOTIFICATION_TYPES = [
+  'reminder',
+  'overdue',
+  'blocker_resolved',
+  'task_completed',
+  'conflict_detected',
+] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 // --- Pagination ---
 export const DEFAULT_PAGE_LIMIT = 20;

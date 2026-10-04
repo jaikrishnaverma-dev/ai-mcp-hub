@@ -18,6 +18,14 @@ import {
   logDecisionInput,
   setBlockerInput,
   createLinkInput,
+  // Phase 2 schemas
+  createEventInput,
+  getCalendarViewInput,
+  checkConflictsInput,
+  findFreeSlotsInput,
+  setReminderInput,
+  updateNotificationPrefsInput,
+  registerPushSubscriptionInput,
   type ServiceContext,
   type ItemType,
 } from '@assistant/shared';
@@ -26,6 +34,9 @@ import { linksService } from '../modules/links/service.js';
 import { decisionsService } from '../modules/decisions/service.js';
 import { blockersService } from '../modules/blockers/service.js';
 import { plannerService } from '../modules/planner/service.js';
+import { calendarService } from '../modules/calendar/service.js';
+import { notificationsService } from '../modules/notifications/service.js';
+import { getVapidPublicKey } from '../modules/notifications/channels/web-push.js';
 import { toolRegistry } from '../mcp/registry.js';
 import { logger } from '../config/index.js';
 import { Decision } from '../modules/decisions/model.js';
@@ -576,10 +587,10 @@ apiRouter.get('/items/:id', async (req: Request, res: Response, next: NextFuncti
 
 apiRouter.post('/items', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const type = (req.body.type as ItemType) || 'task';
     const input = createTaskInput.parse(req.body);
+    const type = (req.body.type as ItemType) || input.type || 'task';
     const result = await itemsService.createItem(
-      { type, ...input },
+      { ...input, type },
       getCtx(req),
     );
     res.status(201).json(result);
@@ -726,6 +737,204 @@ apiRouter.get('/activity', async (req: Request, res: Response, next: NextFunctio
         reason: a.reason ?? null,
         createdAt: a.createdAt.toISOString(),
       })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==============================================================================
+// 5. Calendar (Phase 2)
+// ==============================================================================
+
+apiRouter.get('/calendar', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = getCalendarViewInput.parse(req.query);
+    const result = await calendarService.getCalendarView(input, getCtx(req));
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/calendar/events', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = createEventInput.parse(req.body);
+    const result = await calendarService.createEvent(input, getCtx(req));
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.get('/calendar/conflicts', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = checkConflictsInput.parse(req.query);
+    const result = await calendarService.checkConflicts(input, getCtx(req));
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.get('/calendar/free-slots', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = findFreeSlotsInput.parse(req.query);
+    const result = await calendarService.findFreeSlots(input, getCtx(req));
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ==============================================================================
+// 6. Notifications & Reminders (Phase 2)
+// ==============================================================================
+
+// --- Reminders ---
+apiRouter.post('/reminders', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = setReminderInput.parse(req.body);
+    const result = await notificationsService.setReminder(input, getCtx(req));
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.get('/reminders', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = getCtx(req);
+    const result = await notificationsService.listReminders(
+      {
+        itemId: req.query['itemId'] as string | undefined,
+        state: req.query['state'] as string | undefined,
+        limit: req.query['limit'] ? parseInt(req.query['limit'] as string, 10) : undefined,
+      },
+      ctx,
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.delete('/reminders/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params['id'] as string;
+    const reason = req.body?.reason as string | undefined;
+    const result = await notificationsService.cancelReminder(id, reason, getCtx(req));
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Notification Preferences ---
+apiRouter.get('/notifications/preferences', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const prefs = await notificationsService.getPreferences(getCtx(req));
+    res.json(prefs);
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.patch('/notifications/preferences', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = updateNotificationPrefsInput.parse(req.body);
+    const result = await notificationsService.updatePreferences(input, getCtx(req));
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Web Push Subscriptions ---
+apiRouter.post('/push/subscribe', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const input = registerPushSubscriptionInput.parse(req.body);
+    const result = await notificationsService.registerPushSubscription(input, getCtx(req));
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/push/unsubscribe', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { endpoint } = req.body;
+    if (!endpoint) {
+      res.status(400).json({ error: 'endpoint is required' });
+      return;
+    }
+    const result = await notificationsService.unregisterPushSubscription(endpoint, getCtx(req));
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.get('/push/vapid-key', (_req: Request, res: Response) => {
+  res.json({ publicKey: getVapidPublicKey() });
+});
+
+// --- Telegram Webhook (for bot /start commands to link users) ---
+apiRouter.post('/telegram/webhook', async (req: Request, res: Response) => {
+  try {
+    const update = req.body;
+    const message = update?.message;
+    if (!message?.text) {
+      res.json({ ok: true });
+      return;
+    }
+
+    const text = message.text as string;
+    const chatId = String(message.chat?.id);
+
+    // Handle /start <userId> command to link Telegram to user account
+    if (text.startsWith('/start')) {
+      const parts = text.split(' ');
+      const userId = parts[1];
+
+      if (userId && mongoose.isValidObjectId(userId)) {
+        await notificationsService.updatePreferences(
+          { telegramChatId: chatId, channels: ['web_push', 'telegram'] },
+          { userId, actorType: 'system' },
+        );
+        logger.info({ chatId, userId }, 'Telegram account linked');
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, 'Telegram webhook error');
+    res.json({ ok: true }); // Always 200 to Telegram
+  }
+});
+
+// ==============================================================================
+// 7. Cron Endpoint (Phase 2) — Secured by X-Cron-Secret header
+// ==============================================================================
+
+apiRouter.post('/cron/process', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const cronSecret = process.env['CRON_SECRET'];
+    const providedSecret = req.headers['x-cron-secret'] as string;
+
+    if (!cronSecret || providedSecret !== cronSecret) {
+      res.status(403).json({ error: 'FORBIDDEN', message: 'Invalid cron secret' });
+      return;
+    }
+
+    const batchSize = req.body?.batchSize ?? 50;
+    const dryRun = req.body?.dryRun ?? false;
+
+    const result = await notificationsService.processReminders(batchSize, dryRun);
+    res.json({
+      success: true,
+      ...result,
+      processedAt: new Date().toISOString(),
     });
   } catch (err) {
     next(err);

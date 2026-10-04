@@ -6,6 +6,7 @@ import {
   type DecisionItem,
   type ActivityItem,
   type UserProfile,
+  type ItemDetailResponse,
 } from '../api/client.js';
 import {
   Search,
@@ -21,9 +22,16 @@ import {
   ChevronRight,
   FolderTree,
   List,
+  XCircle,
+  Calendar,
+  Clock,
+  FileText,
+  Info,
+  Link2,
 } from 'lucide-react';
 import { Button } from './ui/button.js';
-import { StatusBadge, PriorityBadge } from './ui/badge.js';
+import { StatusBadge, PriorityBadge, getStatusCardClass, getStatusTickerClass } from './ui/badge.js';
+import { cn } from '@/lib/utils.js';
 import { Input } from './ui/input.js';
 import { Label } from './ui/label.js';
 import {
@@ -32,6 +40,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from './ui/dialog.js';
 
 
@@ -55,6 +64,11 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
   const [collapsedGoals, setCollapsedGoals] = useState<Record<string, boolean>>({});
   const [collapsedStories, setCollapsedStories] = useState<Record<string, boolean>>({});
 
+  // Item Detail Popup Modal State
+  const [selectedDetailItem, setSelectedDetailItem] = useState<TaskItem | null>(null);
+  const [itemFullDetails, setItemFullDetails] = useState<ItemDetailResponse | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   // Add Item Dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -63,6 +77,11 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
   const [newType, setNewType] = useState<'task' | 'story' | 'goal'>('task');
   const [newParentId, setNewParentId] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
+
+  // Delete Confirmation Dialog
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState<{ id: string; title: string; type?: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const openAddModal = (type: 'goal' | 'story' | 'task' = 'task', parentId = '') => {
     setNewType(type);
@@ -118,14 +137,82 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
     }
   };
 
-  const handleDeleteTask = async (id: string) => {
-    if (!window.confirm('Delete this item?')) return;
+  const handleToggleCancel = async (task: TaskItem) => {
     try {
-      await api.deleteTask(id);
+      if (task.status === 'cancelled') {
+        await api.updateTask(task.id, { status: 'todo', reason: 'Reopened via portal' });
+      } else {
+        await api.updateTask(task.id, { status: 'cancelled', reason: 'Cancelled via portal' });
+      }
       await loadData();
     } catch (err) {
-      console.error('Failed to delete item:', err);
+      console.error('Failed to toggle cancel status:', err);
     }
+  };
+
+  const promptDeleteItem = (item: { id: string; title: string; type?: string }) => {
+    setDeleteConfirmItem(item);
+    setDeleteError(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmItem) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      await api.deleteTask(deleteConfirmItem.id);
+      setDeleteConfirmItem(null);
+      await loadData();
+    } catch (err: any) {
+      console.error('Failed to delete item:', err);
+      setDeleteError(err?.message || 'Failed to delete item. Please try again.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const openItemDetail = async (item: TaskItem) => {
+    setSelectedDetailItem(item);
+    setItemFullDetails(null);
+    setDetailLoading(true);
+    try {
+      const full = await api.getItem(item.id);
+      setItemFullDetails(full);
+    } catch (err) {
+      console.error('Failed to load full item details:', err);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleDetailToggleComplete = async () => {
+    if (!selectedDetailItem) return;
+    await handleToggleComplete(selectedDetailItem);
+    const updatedStatus = selectedDetailItem.status === 'done' ? 'todo' : 'done';
+    setSelectedDetailItem((prev) => (prev ? { ...prev, status: updatedStatus } : null));
+    try {
+      const refreshed = await api.getItem(selectedDetailItem.id);
+      setItemFullDetails(refreshed);
+    } catch (_) {}
+  };
+
+  const handleDetailToggleCancel = async () => {
+    if (!selectedDetailItem) return;
+    await handleToggleCancel(selectedDetailItem);
+    const updatedStatus = selectedDetailItem.status === 'cancelled' ? 'todo' : 'cancelled';
+    setSelectedDetailItem((prev) => (prev ? { ...prev, status: updatedStatus } : null));
+    try {
+      const refreshed = await api.getItem(selectedDetailItem.id);
+      setItemFullDetails(refreshed);
+    } catch (_) {}
+  };
+
+  const handleDetailDelete = () => {
+    if (!selectedDetailItem) return;
+    const itemToDelete = { ...selectedDetailItem };
+    setSelectedDetailItem(null);
+    setItemFullDetails(null);
+    promptDeleteItem({ id: itemToDelete.id, title: itemToDelete.title, type: itemToDelete.type });
   };
 
   const handleResolveBlocker = async (id: string) => {
@@ -493,6 +580,7 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                   { id: 'in_progress', label: 'In Progress' },
                   { id: 'blocked', label: 'Blocked' },
                   { id: 'done', label: 'Done' },
+                  { id: 'cancelled', label: 'Cancelled' },
                 ].map((pill) => (
                   <button
                     key={pill.id}
@@ -535,11 +623,15 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                   {filteredGoalTrees.map((gt) => {
                     const isGoalCollapsed = !!collapsedGoals[gt.goal.id];
                     const isGoalDone = gt.goal.status === 'done';
+                    const isGoalCancelled = gt.goal.status === 'cancelled';
 
                     return (
                       <div
                         key={gt.goal.id}
-                        className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs overflow-hidden transition-all"
+                        className={cn(
+                          'rounded-2xl border shadow-xs overflow-hidden transition-all',
+                          getStatusCardClass(gt.goal.status)
+                        )}
                       >
                         {/* 1. GOAL LEVEL HEADER */}
                         <div className="p-3.5 sm:p-4 bg-zinc-50/80 dark:bg-zinc-800/40 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between gap-3">
@@ -557,13 +649,23 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                               )}
                             </button>
 
-                            <div className="h-8 px-2 rounded-lg bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/60 font-mono font-bold text-xs flex items-center justify-center shrink-0 select-none shadow-2xs">
+                            <div
+                              onClick={() => openItemDetail(gt.goal)}
+                              className="h-8 px-2 rounded-lg bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/60 font-mono font-bold text-xs flex items-center justify-center shrink-0 select-none shadow-2xs cursor-pointer hover:scale-105 transition-transform"
+                              title="Click to view Goal details"
+                            >
                               GOL
                             </div>
 
-                            <div className="min-w-0 flex-1 truncate space-y-0.5">
+                            <div
+                              onClick={() => openItemDetail(gt.goal)}
+                              className="min-w-0 flex-1 truncate space-y-0.5 cursor-pointer group/goal"
+                              title="Click to view Goal details"
+                            >
                               <div className="flex items-center gap-2">
-                                <h3 className={`text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-50 truncate ${isGoalDone ? 'line-through text-zinc-400 dark:text-zinc-500' : ''}`}>
+                                <h3 className={`text-sm sm:text-base font-bold truncate group-hover/goal:text-purple-600 dark:group-hover/goal:text-purple-400 group-hover/goal:underline transition-colors ${
+                                  isGoalDone || isGoalCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-50'
+                                }`}>
                                   {gt.goal.title}
                                 </h3>
                                 <span className="rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 px-2 py-0.2 text-[10px] font-semibold border border-purple-200/60 dark:border-purple-800/40 uppercase hidden sm:inline-block">
@@ -579,14 +681,14 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                           </div>
 
                           {/* Goal Right Actions & Metrics */}
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                             {gt.totalTasks > 0 && (
                               <span className="rounded-full bg-zinc-200/70 dark:bg-zinc-800 px-2.5 py-0.5 text-[10px] font-semibold font-mono text-zinc-700 dark:text-zinc-300 hidden md:inline-block">
                                 {gt.doneTasks}/{gt.totalTasks} Done
                               </span>
                             )}
 
-                            <StatusBadge status={gt.goal.status} className="hidden xs:inline-flex" />
+                            <StatusBadge status={gt.goal.status} className="inline-flex shrink-0" />
 
                             <Button
                               variant="outline"
@@ -612,7 +714,23 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                             </button>
 
                             <button
-                              onClick={() => handleDeleteTask(gt.goal.id)}
+                              onClick={() => handleToggleCancel(gt.goal)}
+                              className={`h-8 w-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                isGoalCancelled
+                                  ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
+                                  : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'
+                              }`}
+                              title={isGoalCancelled ? 'Re-open goal' : 'Cancel goal'}
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                promptDeleteItem({ id: gt.goal.id, title: gt.goal.title, type: 'goal' });
+                              }}
                               className="h-8 w-8 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer"
                               title="Delete goal"
                             >
@@ -638,11 +756,15 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                               gt.stories.map((st) => {
                                 const isStoryCollapsed = !!collapsedStories[st.story.id];
                                 const isStoryDone = st.story.status === 'done';
+                                const isStoryCancelled = st.story.status === 'cancelled';
 
                                 return (
                                   <div
                                     key={st.story.id}
-                                    className="rounded-xl border border-zinc-200/70 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/60 p-3 sm:p-3.5 space-y-2.5 transition-all"
+                                    className={cn(
+                                      'rounded-xl border p-3 sm:p-3.5 space-y-2.5 transition-all shadow-2xs',
+                                      getStatusCardClass(st.story.status)
+                                    )}
                                   >
                                     {/* STORY HEADER */}
                                     <div className="flex items-center justify-between gap-2.5">
@@ -660,13 +782,23 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                           )}
                                         </button>
 
-                                        <div className="h-7 px-2 rounded-lg bg-sky-100 dark:bg-sky-950/80 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/60 font-mono font-bold text-[11px] flex items-center justify-center shrink-0 select-none shadow-2xs">
+                                        <div
+                                          onClick={() => openItemDetail(st.story)}
+                                          className="h-7 px-2 rounded-lg bg-sky-100 dark:bg-sky-950/80 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/60 font-mono font-bold text-[11px] flex items-center justify-center shrink-0 select-none shadow-2xs cursor-pointer hover:scale-105 transition-transform"
+                                          title="Click to view Story details"
+                                        >
                                           STY
                                         </div>
 
-                                        <div className="min-w-0 flex-1 truncate space-y-0.5">
+                                        <div
+                                          onClick={() => openItemDetail(st.story)}
+                                          className="min-w-0 flex-1 truncate space-y-0.5 cursor-pointer group/story"
+                                          title="Click to view Story details"
+                                        >
                                           <div className="flex items-center gap-1.5">
-                                            <h4 className={`text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate ${isStoryDone ? 'line-through text-zinc-400 dark:text-zinc-500' : ''}`}>
+                                            <h4 className={`text-xs sm:text-sm font-semibold truncate group-hover/story:text-sky-600 dark:group-hover/story:text-sky-400 group-hover/story:underline transition-colors ${
+                                              isStoryDone || isStoryCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+                                            }`}>
                                               {st.story.title}
                                             </h4>
                                             <span className="rounded bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300 px-1.5 py-0.2 text-[9px] font-semibold border border-sky-200/50 dark:border-sky-800/40 uppercase hidden sm:inline-block">
@@ -682,8 +814,8 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                       </div>
 
                                       {/* Story Actions */}
-                                      <div className="flex items-center gap-1.5 shrink-0">
-                                        <StatusBadge status={st.story.status} className="hidden sm:inline-flex" />
+                                      <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                        <StatusBadge status={st.story.status} className="inline-flex shrink-0" />
 
                                         <Button
                                           variant="outline"
@@ -709,7 +841,23 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                         </button>
 
                                         <button
-                                          onClick={() => handleDeleteTask(st.story.id)}
+                                          onClick={() => handleToggleCancel(st.story)}
+                                          className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                            isStoryCancelled
+                                              ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
+                                              : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'
+                                          }`}
+                                          title={isStoryCancelled ? 'Re-open story' : 'Cancel story'}
+                                        >
+                                          <XCircle className="h-3.5 w-3.5" />
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            promptDeleteItem({ id: st.story.id, title: st.story.title, type: 'story' });
+                                          }}
                                           className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer"
                                           title="Delete story"
                                         >
@@ -734,22 +882,31 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                         ) : (
                                           st.tasks.map((t) => {
                                             const isDone = t.status === 'done';
+                                            const isCancelled = t.status === 'cancelled';
 
                                             return (
                                               <div
                                                 key={t.id}
-                                                className={`flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-all gap-2.5 shadow-2xs ${
-                                                  isDone ? 'opacity-65' : ''
-                                                }`}
+                                                onClick={() => openItemDetail(t)}
+                                                className={cn(
+                                                  'flex items-center justify-between p-2.5 sm:p-3 rounded-xl border transition-all gap-2.5 shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600',
+                                                  getStatusCardClass(t.status)
+                                                )}
+                                                title="Click to view Task details"
                                               >
                                                 {/* Left: TSK badge */}
-                                                <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200/90 dark:border-zinc-700/80 flex items-center justify-center font-mono font-bold text-[10px] text-zinc-700 dark:text-zinc-300 shadow-2xs shrink-0 select-none">
+                                                <div className={cn(
+                                                  'h-7 w-7 sm:h-8 sm:w-8 rounded-lg border flex items-center justify-center font-mono font-bold text-[10px] shadow-2xs shrink-0 select-none',
+                                                  getStatusTickerClass(t.status)
+                                                )}>
                                                   TSK
                                                 </div>
 
                                                 {/* Middle: Title & Metadata */}
                                                 <div className="space-y-0.5 min-w-0 flex-1 truncate">
-                                                  <h5 className={`text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate ${isDone ? 'line-through text-zinc-400 dark:text-zinc-500' : ''}`}>
+                                                  <h5 className={`text-xs sm:text-sm font-semibold truncate hover:underline ${
+                                                    isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+                                                  }`}>
                                                     {t.title}
                                                   </h5>
                                                   <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
@@ -760,8 +917,11 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                                 </div>
 
                                                 {/* Right: Pill Badge + Actions */}
-                                                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                                                  <StatusBadge status={t.status} className="hidden xs:inline-flex" />
+                                                <div
+                                                  className="flex items-center gap-1.5 sm:gap-2 shrink-0"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                >
+                                                  <StatusBadge status={t.status} className="inline-flex shrink-0" />
 
                                                   <div className="flex items-center gap-1">
                                                     <button
@@ -777,7 +937,23 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                                     </button>
 
                                                     <button
-                                                      onClick={() => handleDeleteTask(t.id)}
+                                                      onClick={() => handleToggleCancel(t)}
+                                                      className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                                        isCancelled
+                                                          ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
+                                                          : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'
+                                                      }`}
+                                                      title={isCancelled ? 'Re-open task' : 'Cancel task'}
+                                                    >
+                                                      <XCircle className="h-3.5 w-3.5" />
+                                                    </button>
+
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        promptDeleteItem({ id: t.id, title: t.title, type: 'task' });
+                                                      }}
                                                       className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer"
                                                       title="Delete task"
                                                     >
@@ -795,11 +971,177 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                 );
                               })
                             )}
+
+                            {/* Direct Tasks under this Goal */}
+                            {gt.directTasks.length > 0 && (
+                              <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                                <div className="text-[11px] font-mono uppercase text-zinc-400 font-semibold px-1">
+                                  Direct Tasks ({gt.directTasks.length})
+                                </div>
+                                {gt.directTasks.map((t) => {
+                                  const isDone = t.status === 'done';
+                                  const isCancelled = t.status === 'cancelled';
+                                  return (
+                                    <div
+                                      key={t.id}
+                                      onClick={() => openItemDetail(t)}
+                                      className={cn(
+                                        'flex items-center justify-between p-2.5 sm:p-3 rounded-xl border transition-all gap-2.5 shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600',
+                                        getStatusCardClass(t.status)
+                                      )}
+                                      title="Click to view Task details"
+                                    >
+                                      <div className={cn(
+                                        'h-7 w-7 sm:h-8 sm:w-8 rounded-lg border flex items-center justify-center font-mono font-bold text-[10px] shadow-2xs shrink-0 select-none',
+                                        getStatusTickerClass(t.status)
+                                      )}>
+                                        TSK
+                                      </div>
+                                      <div className="space-y-0.5 min-w-0 flex-1 truncate">
+                                        <h5 className={`text-xs sm:text-sm font-semibold truncate hover:underline ${
+                                          isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+                                        }`}>
+                                          {t.title}
+                                        </h5>
+                                        <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
+                                          <PriorityBadge priority={t.priority} />
+                                          <span>·</span>
+                                          <span>{new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</span>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                        <StatusBadge status={t.status} className="inline-flex shrink-0" />
+                                        <div className="flex items-center gap-1">
+                                          <button onClick={() => handleToggleComplete(t)} className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${isDone ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800'}`}>
+                                            <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                                          </button>
+                                          <button onClick={() => handleToggleCancel(t)} className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${isCancelled ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'}`}>
+                                            <XCircle className="h-3.5 w-3.5" />
+                                          </button>
+                                          <button type="button" onClick={() => promptDeleteItem({ id: t.id, title: t.title, type: 'task' })} className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer">
+                                            <Trash2 className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
                     );
                   })}
+
+                  {/* ORPHAN STORIES (Stories not attached to goals) */}
+                  {filteredOrphanStories.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider px-1">
+                        Independent Stories ({filteredOrphanStories.length})
+                      </div>
+                      {filteredOrphanStories.map((st) => {
+                        const isStoryDone = st.story.status === 'done';
+                        const isStoryCancelled = st.story.status === 'cancelled';
+                        return (
+                          <div
+                            key={st.story.id}
+                            className={cn(
+                              'rounded-xl border p-3.5 space-y-2.5 transition-all shadow-2xs',
+                              getStatusCardClass(st.story.status)
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-2.5">
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                <div
+                                  onClick={() => openItemDetail(st.story)}
+                                  className="h-7 px-2 rounded-lg bg-sky-100 dark:bg-sky-950/80 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/60 font-mono font-bold text-[11px] flex items-center justify-center shrink-0 select-none shadow-2xs cursor-pointer hover:scale-105 transition-transform"
+                                  title="Click to view Story details"
+                                >
+                                  STY
+                                </div>
+                                <div
+                                  onClick={() => openItemDetail(st.story)}
+                                  className="min-w-0 flex-1 truncate space-y-0.5 cursor-pointer group/orphan"
+                                  title="Click to view Story details"
+                                >
+                                  <h4 className={`text-xs sm:text-sm font-semibold truncate group-hover/orphan:text-sky-600 dark:group-hover/orphan:text-sky-400 group-hover/orphan:underline transition-colors ${
+                                    isStoryDone || isStoryCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+                                  }`}>
+                                    {st.story.title}
+                                  </h4>
+                                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
+                                    <span>{st.tasks.length} {st.tasks.length === 1 ? 'TASK' : 'TASKS'}</span>
+                                    <span>·</span>
+                                    <PriorityBadge priority={st.story.priority} />
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <StatusBadge status={st.story.status} className="inline-flex shrink-0" />
+                                <button onClick={() => handleToggleComplete(st.story)} className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${isStoryDone ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800'}`}>
+                                  <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                                </button>
+                                <button onClick={() => handleToggleCancel(st.story)} className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${isStoryCancelled ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'}`}>
+                                  <XCircle className="h-3.5 w-3.5" />
+                                </button>
+                                <button type="button" onClick={() => promptDeleteItem({ id: st.story.id, title: st.story.title, type: 'story' })} className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer">
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            </div>
+                            {st.tasks.length > 0 && (
+                              <div className="pl-3 sm:pl-4 border-l-2 border-sky-200/70 dark:border-sky-900/50 ml-2.5 sm:ml-3 space-y-1.5 pt-1">
+                                {st.tasks.map((t) => {
+                                  const isDone = t.status === 'done';
+                                  const isCancelled = t.status === 'cancelled';
+                                  return (
+                                    <div
+                                      key={t.id}
+                                      onClick={() => openItemDetail(t)}
+                                      className={cn(
+                                        'flex items-center justify-between p-2.5 sm:p-3 rounded-xl border transition-all gap-2.5 shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600',
+                                        getStatusCardClass(t.status)
+                                      )}
+                                      title="Click to view Task details"
+                                    >
+                                      <div className={cn('h-7 w-7 sm:h-8 sm:w-8 rounded-lg border flex items-center justify-center font-mono font-bold text-[10px] shadow-2xs shrink-0 select-none', getStatusTickerClass(t.status))}>
+                                        TSK
+                                      </div>
+                                      <div className="space-y-0.5 min-w-0 flex-1 truncate">
+                                        <h5 className={`text-xs sm:text-sm font-semibold truncate hover:underline ${isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'}`}>
+                                          {t.title}
+                                        </h5>
+                                        <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
+                                          <PriorityBadge priority={t.priority} />
+                                          <span>·</span>
+                                          <span>{new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</span>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                        <StatusBadge status={t.status} className="inline-flex shrink-0" />
+                                        <div className="flex items-center gap-1">
+                                          <button onClick={() => handleToggleComplete(t)} className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${isDone ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800'}`}>
+                                            <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                                          </button>
+                                          <button onClick={() => handleToggleCancel(t)} className={`h-7 w-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${isCancelled ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'}`}>
+                                            <XCircle className="h-3.5 w-3.5" />
+                                          </button>
+                                          <button type="button" onClick={() => promptDeleteItem({ id: t.id, title: t.title, type: 'task' })} className="h-7 w-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer">
+                                            <Trash2 className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* STANDALONE TASKS (TASKS NOT ATTACHED TO GOALS OR STORIES) */}
                   {filteredStandaloneTasks.length > 0 && (
@@ -824,20 +1166,29 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                       <div className="space-y-1.5">
                         {filteredStandaloneTasks.map((t) => {
                           const isDone = t.status === 'done';
+                          const isCancelled = t.status === 'cancelled';
 
                           return (
                             <div
                               key={t.id}
-                              className={`flex items-center justify-between p-3 rounded-xl bg-zinc-50/70 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/70 transition-all gap-3 ${
-                                isDone ? 'opacity-65' : ''
-                              }`}
+                              onClick={() => openItemDetail(t)}
+                              className={cn(
+                                'flex items-center justify-between p-3 rounded-xl border transition-all gap-3 shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600',
+                                getStatusCardClass(t.status)
+                              )}
+                              title="Click to view Task details"
                             >
-                              <div className="h-9 w-9 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/90 dark:border-zinc-700/80 flex items-center justify-center font-mono font-bold text-xs text-zinc-800 dark:text-zinc-200 shadow-2xs shrink-0 select-none">
+                              <div className={cn(
+                                'h-9 w-9 rounded-xl border flex items-center justify-center font-mono font-bold text-xs shadow-2xs shrink-0 select-none',
+                                getStatusTickerClass(t.status)
+                              )}>
                                 TSK
                               </div>
 
                               <div className="space-y-0.5 min-w-0 flex-1 truncate">
-                                <h4 className={`text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate ${isDone ? 'line-through text-zinc-400 dark:text-zinc-500' : ''}`}>
+                                <h4 className={`text-xs sm:text-sm font-semibold truncate hover:underline ${
+                                  isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+                                }`}>
                                   {t.title}
                                 </h4>
                                 <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
@@ -849,8 +1200,8 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-2 shrink-0">
-                                <StatusBadge status={t.status} className="hidden xs:inline-flex" />
+                              <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <StatusBadge status={t.status} className="inline-flex shrink-0" />
 
                                 <div className="flex items-center gap-1">
                                   <button
@@ -866,7 +1217,23 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                                   </button>
 
                                   <button
-                                    onClick={() => handleDeleteTask(t.id)}
+                                    onClick={() => handleToggleCancel(t)}
+                                    className={`h-8 w-8 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                                      isCancelled
+                                        ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
+                                        : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'
+                                    }`}
+                                    title={isCancelled ? 'Re-open task' : 'Cancel task'}
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      promptDeleteItem({ id: t.id, title: t.title, type: 'task' });
+                                    }}
                                     className="h-8 w-8 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer"
                                     title="Delete task"
                                   >
@@ -895,22 +1262,31 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
               ) : (
                 filteredTasks.map((t) => {
                   const isDone = t.status === 'done';
+                  const isCancelled = t.status === 'cancelled';
                   const ticker = t.type === 'story' ? 'STY' : t.type === 'goal' ? 'GOL' : 'TSK';
                   const crumbs = getBreadcrumbs(t);
 
                   return (
                     <div
                       key={t.id}
-                      className={`flex items-center justify-between p-3 sm:p-3.5 rounded-xl bg-[#fafafa] dark:bg-zinc-900/60 border border-zinc-100 dark:border-zinc-800/80 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/60 transition-all gap-3 ${
-                        isDone ? 'opacity-70' : ''
-                      }`}
+                      onClick={() => openItemDetail(t)}
+                      className={cn(
+                        'flex items-center justify-between p-3 sm:p-3.5 rounded-xl border transition-all gap-3 shadow-2xs cursor-pointer hover:ring-1 hover:ring-zinc-400/50 dark:hover:ring-zinc-600',
+                        getStatusCardClass(t.status)
+                      )}
+                      title="Click to view details"
                     >
-                      <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200/90 dark:border-zinc-700/80 flex items-center justify-center font-mono font-bold text-xs text-zinc-800 dark:text-zinc-200 shadow-2xs shrink-0 select-none">
+                      <div className={cn(
+                        'h-10 w-10 sm:h-11 sm:w-11 rounded-xl border flex items-center justify-center font-mono font-bold text-xs shadow-2xs shrink-0 select-none',
+                        getStatusTickerClass(t.status)
+                      )}>
                         {ticker}
                       </div>
 
                       <div className="space-y-0.5 min-w-0 flex-1 truncate">
-                        <h4 className={`text-xs sm:text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate ${isDone ? 'line-through text-zinc-400 dark:text-zinc-500' : ''}`}>
+                        <h4 className={`text-xs sm:text-sm font-semibold truncate hover:underline ${
+                          isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+                        }`}>
                           {t.title}
                         </h4>
                         <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wide truncate">
@@ -925,8 +1301,8 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                        <StatusBadge status={t.status} className="hidden xs:inline-flex" />
+                      <div className="flex items-center gap-2 sm:gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <StatusBadge status={t.status} className="inline-flex shrink-0" />
 
                         <div className="flex items-center gap-1">
                           <button
@@ -942,7 +1318,23 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
                           </button>
 
                           <button
-                            onClick={() => handleDeleteTask(t.id)}
+                            onClick={() => handleToggleCancel(t)}
+                            className={`h-8 w-8 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                              isCancelled
+                                ? 'border-rose-300 bg-rose-50 text-rose-600 dark:border-rose-800 dark:bg-rose-950/40'
+                                : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800'
+                            }`}
+                            title={isCancelled ? 'Re-open item' : 'Cancel item'}
+                          >
+                            <XCircle className="h-4 w-4 stroke-[2]" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              promptDeleteItem({ id: t.id, title: t.title, type: t.type || 'task' });
+                            }}
                             className="h-8 w-8 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-400 hover:text-red-600 hover:border-red-200 dark:hover:border-red-900/50 flex items-center justify-center transition-colors cursor-pointer"
                             title="Delete item"
                           >
@@ -1193,6 +1585,431 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* DELETE CONFIRMATION DIALOG */}
+      <Dialog
+        open={!!deleteConfirmItem}
+        onOpenChange={(open) => {
+          if (!open && !deleteLoading) {
+            setDeleteConfirmItem(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-red-100 dark:bg-red-950/60 border border-red-200 dark:border-red-800 flex items-center justify-center text-red-600 shrink-0">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <DialogTitle className="text-base font-bold text-zinc-900 dark:text-zinc-50">
+                  Delete {deleteConfirmItem?.type ? deleteConfirmItem.type.charAt(0).toUpperCase() + deleteConfirmItem.type.slice(1) : 'Item'}?
+                </DialogTitle>
+                <DialogDescription className="text-xs text-zinc-500">
+                  This will soft-delete this item and any nested sub-tasks or dependencies.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="py-2 space-y-2">
+            <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/80 text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">
+              "{deleteConfirmItem?.title}"
+            </div>
+            {deleteError && (
+              <p className="text-xs text-red-600 font-medium px-1">{deleteError}</p>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDeleteConfirmItem(null);
+                setDeleteError(null);
+              }}
+              disabled={deleteLoading}
+              className="rounded-xl text-xs h-9 cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmDelete}
+              disabled={deleteLoading}
+              className="rounded-xl text-xs h-9 bg-red-600 hover:bg-red-700 text-white font-semibold cursor-pointer shadow-xs"
+            >
+              {deleteLoading ? 'Deleting...' : 'Delete Item'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ITEM DETAIL POPUP MODAL */}
+      <Dialog
+        open={!!selectedDetailItem}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedDetailItem(null);
+            setItemFullDetails(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[88vh] overflow-y-auto rounded-2xl p-0 gap-0 border border-zinc-200 dark:border-zinc-800 shadow-2xl">
+          {selectedDetailItem && (() => {
+            const currentItem = itemFullDetails?.item || selectedDetailItem;
+            const isDone = currentItem.status === 'done';
+            const isCancelled = currentItem.status === 'cancelled';
+            const isBlocked = currentItem.status === 'blocked';
+            const crumbs = getBreadcrumbs(selectedDetailItem);
+            const activeBlocker = itemFullDetails?.blockers?.find((b) => !b.resolvedAt) || blockers.find((b) => b.itemId === selectedDetailItem.id);
+            const recentActivityWithReason = itemFullDetails?.history?.find((h) => !!h.reason);
+            const displayDesc = itemFullDetails?.item?.description || selectedDetailItem.description;
+
+            return (
+              <div className="flex flex-col">
+                {/* 1. MODAL HEADER */}
+                <div className={cn(
+                  'p-5 sm:p-6 border-b transition-colors space-y-3',
+                  getStatusCardClass(currentItem.status)
+                )}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={cn(
+                        'px-2.5 py-1 rounded-lg font-mono font-bold text-xs uppercase shadow-2xs border',
+                        currentItem.type === 'goal'
+                          ? 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800'
+                          : currentItem.type === 'story'
+                          ? 'bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800'
+                          : 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
+                      )}>
+                        {currentItem.type === 'goal' ? 'GOL · GOAL' : currentItem.type === 'story' ? 'STY · STORY' : 'TSK · TASK'}
+                      </span>
+                      <StatusBadge status={currentItem.status} />
+                      <PriorityBadge priority={currentItem.priority} />
+                    </div>
+
+                    {detailLoading && (
+                      <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-medium">
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        <span>Loading details...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <DialogTitle className={cn(
+                      'text-lg sm:text-xl font-bold leading-snug',
+                      isDone || isCancelled ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-50'
+                    )}>
+                      {currentItem.title}
+                    </DialogTitle>
+                    <DialogDescription className="sr-only">
+                      Detailed view for {currentItem.title}
+                    </DialogDescription>
+                  </div>
+
+                  {/* Breadcrumb Hierarchy */}
+                  <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 font-medium flex-wrap pt-0.5">
+                    <span className="font-semibold text-zinc-700 dark:text-zinc-300">Hierarchy:</span>
+                    {crumbs.length > 0 ? (
+                      <span>{crumbs.join(' › ')} › <span className="font-semibold text-zinc-900 dark:text-zinc-100">{currentItem.title}</span></span>
+                    ) : (
+                      <span>Root Level {currentItem.type ? currentItem.type.charAt(0).toUpperCase() + currentItem.type.slice(1) : 'Item'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. BODY CONTENT */}
+                <div className="p-5 sm:p-6 space-y-5 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100">
+                  {/* Quick Info Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div className="p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 space-y-1">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">
+                        <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+                        <span>Due Date</span>
+                      </div>
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                        {currentItem.dueAt
+                          ? new Date(currentItem.dueAt).toLocaleDateString(undefined, { dateStyle: 'medium' })
+                          : 'No due date'}
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 space-y-1">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">
+                        <Clock className="h-3.5 w-3.5 text-zinc-400" />
+                        <span>Created</span>
+                      </div>
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                        {new Date(currentItem.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                      </p>
+                    </div>
+
+                    <div className="col-span-2 sm:col-span-1 p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 space-y-1">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">
+                        <Clock className="h-3.5 w-3.5 text-zinc-400" />
+                        <span>Duration Estimate</span>
+                      </div>
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                        {itemFullDetails?.item?.estimateMin ? `${itemFullDetails.item.estimateMin} mins` : 'Flexible / None'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* REASON / STATUS NOTE SECTION */}
+                  {(isBlocked || activeBlocker || recentActivityWithReason || isCancelled) && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                        <Info className="h-4 w-4 text-amber-500" />
+                        <span>Reason & Status Context</span>
+                      </div>
+
+                      {/* Blocker Reason */}
+                      {(isBlocked || activeBlocker) && (
+                        <div className="rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50/60 dark:bg-red-950/30 p-3.5 space-y-1 shadow-2xs">
+                          <div className="flex items-center gap-2 text-xs font-bold text-red-700 dark:text-red-400">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span>Active Blocker Reason</span>
+                          </div>
+                          <p className="text-sm font-semibold text-red-900 dark:text-red-100">
+                            {activeBlocker?.reason || 'This item is currently flagged as blocked.'}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Recent Action Reason */}
+                      {recentActivityWithReason && (
+                        <div className="rounded-xl border border-sky-200 dark:border-sky-900/60 bg-sky-50/60 dark:bg-sky-950/30 p-3.5 space-y-1 shadow-2xs">
+                          <div className="flex items-center gap-2 text-xs font-bold text-sky-700 dark:text-sky-400">
+                            <Info className="h-4 w-4" />
+                            <span>Latest Logged Reason ({recentActivityWithReason.action})</span>
+                          </div>
+                          <p className="text-sm font-semibold text-sky-950 dark:text-sky-100">
+                            "{recentActivityWithReason.reason}"
+                          </p>
+                          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
+                            Logged by {recentActivityWithReason.actorType} on {new Date(recentActivityWithReason.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Fallback Cancelled Banner */}
+                      {isCancelled && !recentActivityWithReason && (
+                        <div className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/30 p-3.5 space-y-1 shadow-2xs">
+                          <div className="flex items-center gap-2 text-xs font-bold text-rose-700 dark:text-rose-400">
+                            <XCircle className="h-4 w-4" />
+                            <span>Status: Cancelled</span>
+                          </div>
+                          <p className="text-sm font-semibold text-rose-900 dark:text-rose-100">
+                            This item has been marked as cancelled.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* DESCRIPTION / NOTES SECTION */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                      <FileText className="h-4 w-4 text-zinc-500" />
+                      <span>Description & Notes</span>
+                    </div>
+                    <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 p-4 text-sm">
+                      {displayDesc ? (
+                        <p className="whitespace-pre-wrap leading-relaxed text-zinc-800 dark:text-zinc-200">
+                          {displayDesc}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-zinc-400 italic">
+                          No detailed description provided for this item.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* DECISIONS SECTION */}
+                  {itemFullDetails?.decisions && itemFullDetails.decisions.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                        <Lightbulb className="h-4 w-4" />
+                        <span>Decisions Logged ({itemFullDetails.decisions.length})</span>
+                      </div>
+                      <div className="space-y-2">
+                        {itemFullDetails.decisions.map((d) => (
+                          <div
+                            key={d.id}
+                            className="p-3.5 rounded-xl border border-amber-200/80 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20 space-y-1.5 text-xs shadow-2xs"
+                          >
+                            <p className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">{d.summary}</p>
+                            <p className="text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                              <span className="font-semibold text-zinc-900 dark:text-zinc-100">Rationale / Reason:</span> {d.rationale}
+                            </p>
+                            <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-mono">
+                              <span>Decision ID: {d.id.slice(-6)}</span>
+                              <span>·</span>
+                              <span>{new Date(d.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ALL BLOCKERS SECTION */}
+                  {itemFullDetails?.blockers && itemFullDetails.blockers.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-red-700 dark:text-red-400">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span>Blockers History ({itemFullDetails.blockers.length})</span>
+                      </div>
+                      <div className="space-y-2">
+                        {itemFullDetails.blockers.map((b) => (
+                          <div
+                            key={b.id}
+                            className={cn(
+                              'p-3 rounded-xl border space-y-1 text-xs',
+                              b.resolvedAt
+                                ? 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 text-zinc-500'
+                                : 'border-red-200 dark:border-red-900/60 bg-red-50/50 dark:bg-red-950/20 text-red-900 dark:text-red-200'
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold">{b.reason}</span>
+                              <span className={cn(
+                                'text-[10px] px-2 py-0.5 rounded-full font-semibold',
+                                b.resolvedAt ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                              )}>
+                                {b.resolvedAt ? 'Resolved' : 'Active'}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-zinc-400 font-mono">
+                              Logged: {new Date(b.createdAt).toLocaleDateString()} {b.resolvedAt ? `· Resolved: ${new Date(b.resolvedAt).toLocaleDateString()}` : ''}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* LINKED ITEMS & DEPENDENCIES */}
+                  {itemFullDetails?.links && itemFullDetails.links.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                        <Link2 className="h-4 w-4 text-zinc-500" />
+                        <span>Dependencies & Links ({itemFullDetails.links.length})</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {itemFullDetails.links.map((l) => (
+                          <div key={l.id} className="p-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between text-xs">
+                            <span className="font-medium text-zinc-900 dark:text-zinc-100">{l.targetTitle}</span>
+                            <span className="font-mono text-[10px] uppercase text-zinc-400 px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800">
+                              {l.kind} ({l.direction})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ACTIVITY / AUDIT LOG */}
+                  {itemFullDetails?.history && itemFullDetails.history.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                        <History className="h-4 w-4 text-zinc-500" />
+                        <span>Activity & Audit Trail ({itemFullDetails.history.length})</span>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto rounded-xl border border-zinc-200/80 dark:border-zinc-800 divide-y divide-zinc-100 dark:divide-zinc-800/80 text-xs">
+                        {itemFullDetails.history.map((h) => (
+                          <div key={h.id} className="p-2.5 flex items-start justify-between gap-3 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30">
+                            <div className="space-y-0.5 min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold uppercase text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                                  {h.action}
+                                </span>
+                                <span className="text-zinc-500 text-[11px]">by {h.actorType}</span>
+                              </div>
+                              {h.reason && (
+                                <p className="text-zinc-700 dark:text-zinc-300 font-medium">Reason: {h.reason}</p>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-zinc-400 shrink-0 font-mono">
+                              {new Date(h.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. MODAL ACTIONS FOOTER */}
+                <DialogFooter className="p-4 sm:p-5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex flex-row items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDetailToggleComplete}
+                      className={cn(
+                        'h-8 text-xs font-semibold gap-1.5 rounded-lg cursor-pointer',
+                        isDone
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                          : 'text-zinc-700 hover:text-emerald-700 hover:border-emerald-300'
+                      )}
+                    >
+                      <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                      <span>{isDone ? 'Mark Incomplete' : 'Mark Complete'}</span>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDetailToggleCancel}
+                      className={cn(
+                        'h-8 text-xs font-semibold gap-1.5 rounded-lg cursor-pointer',
+                        isCancelled
+                          ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                          : 'text-zinc-700 hover:text-rose-700 hover:border-rose-300'
+                      )}
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      <span>{isCancelled ? 'Re-open Item' : 'Cancel Item'}</span>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDetailDelete}
+                      className="h-8 text-xs font-semibold gap-1.5 rounded-lg text-red-600 hover:text-red-700 hover:border-red-300 cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Delete</span>
+                    </Button>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedDetailItem(null);
+                      setItemFullDetails(null);
+                    }}
+                    className="h-8 text-xs font-semibold rounded-lg px-4 cursor-pointer"
+                  >
+                    Close
+                  </Button>
+                </DialogFooter>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

@@ -52,11 +52,57 @@ export const STATUS_CONFIG: Record<string, StatusConfig> = {
   cancelled: {
     label: 'Cancelled',
     className:
-      'bg-zinc-100/70 text-zinc-500 border-zinc-200/60 dark:bg-zinc-900/60 dark:text-zinc-500 dark:border-zinc-800 line-through',
-    dotClassName: 'bg-zinc-400 dark:bg-zinc-600',
+      'bg-rose-50 text-rose-700 border-rose-200/80 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800/60 line-through shadow-2xs',
+    dotClassName: 'bg-rose-500',
     icon: XCircle,
   },
 };
+
+/**
+ * Visual background & accent border themes for cards/tasks by status
+ */
+export const STATUS_CARD_THEMES: Record<string, { container: string; tickerBorder: string }> = {
+  todo: {
+    container:
+      'bg-slate-50/70 hover:bg-slate-100/80 border-slate-200/90 border-l-4 border-l-slate-400 dark:bg-zinc-900/60 dark:hover:bg-zinc-800/60 dark:border-zinc-800 dark:border-l-slate-500',
+    tickerBorder: 'border-slate-300/80 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 bg-white dark:bg-zinc-800',
+  },
+  in_progress: {
+    container:
+      'bg-sky-50/70 hover:bg-sky-100/80 border-sky-200/90 border-l-4 border-l-sky-500 dark:bg-sky-950/25 dark:hover:bg-sky-950/40 dark:border-sky-800/60 dark:border-l-sky-500',
+    tickerBorder: 'border-sky-300/80 dark:border-sky-800 text-sky-800 dark:text-sky-200 bg-sky-100/60 dark:bg-sky-900/40',
+  },
+  blocked: {
+    container:
+      'bg-amber-50/75 hover:bg-amber-100/85 border-amber-200/90 border-l-4 border-l-amber-500 dark:bg-amber-950/25 dark:hover:bg-amber-950/40 dark:border-amber-800/60 dark:border-l-amber-500',
+    tickerBorder: 'border-amber-300/80 dark:border-amber-800 text-amber-800 dark:text-amber-200 bg-amber-100/60 dark:bg-amber-900/40',
+  },
+  done: {
+    container:
+      'bg-emerald-50/60 hover:bg-emerald-100/70 border-emerald-200/80 border-l-4 border-l-emerald-500 dark:bg-emerald-950/25 dark:hover:bg-emerald-950/40 dark:border-emerald-800/60 dark:border-l-emerald-500 opacity-80',
+    tickerBorder: 'border-emerald-300/80 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 bg-emerald-100/60 dark:bg-emerald-900/40',
+  },
+  completed: {
+    container:
+      'bg-emerald-50/60 hover:bg-emerald-100/70 border-emerald-200/80 border-l-4 border-l-emerald-500 dark:bg-emerald-950/25 dark:hover:bg-emerald-950/40 dark:border-emerald-800/60 dark:border-l-emerald-500 opacity-80',
+    tickerBorder: 'border-emerald-300/80 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 bg-emerald-100/60 dark:bg-emerald-900/40',
+  },
+  cancelled: {
+    container:
+      'bg-rose-50/60 hover:bg-rose-100/70 border-rose-200/80 border-l-4 border-l-rose-400 dark:bg-rose-950/25 dark:hover:bg-rose-950/40 dark:border-rose-900/60 dark:border-l-rose-400 opacity-70',
+    tickerBorder: 'border-rose-300/80 dark:border-rose-800 text-rose-800 dark:text-rose-200 bg-rose-100/60 dark:bg-rose-900/40',
+  },
+};
+
+export function getStatusCardClass(status?: string): string {
+  const key = (status || 'todo').toLowerCase();
+  return STATUS_CARD_THEMES[key]?.container || STATUS_CARD_THEMES['todo']!.container;
+}
+
+export function getStatusTickerClass(status?: string): string {
+  const key = (status || 'todo').toLowerCase();
+  return STATUS_CARD_THEMES[key]?.tickerBorder || STATUS_CARD_THEMES['todo']!.tickerBorder;
+}
 
 export const PRIORITY_CONFIG: Record<string, { label: string; className: string; dotClassName: string }> = {
   critical: {

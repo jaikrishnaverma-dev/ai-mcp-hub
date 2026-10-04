@@ -108,8 +108,9 @@ async function detectCycle(
   for (const result of results) {
     const reachable = result['allReachable'] as string[];
     if (reachable.includes(targetNode)) {
-      // Build a readable cycle path
-      return [startNode, ...reachable.filter(id => id !== startNode), targetNode];
+      // Build a clean cycle path: fromId -> toId -> ... -> fromId
+      const intermediate = reachable.filter(id => id !== startNode && id !== targetNode);
+      return [fromId, toId, ...intermediate, fromId];
     }
   }
 

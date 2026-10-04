@@ -13,7 +13,8 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { Button } from './ui/button.js';
-import { StatusBadge, PriorityBadge } from './ui/badge.js';
+import { StatusBadge, PriorityBadge, getStatusCardClass } from './ui/badge.js';
+import { cn } from '@/lib/utils.js';
 
 interface DailyBriefViewProps {
   currentUser: UserProfile | null;
@@ -197,7 +198,10 @@ export function DailyBriefView({
             brief.suggestedFocus.slice(0, 3).map((item, idx) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
+                className={cn(
+                  'flex items-center justify-between p-4 rounded-2xl border shadow-xs transition-all',
+                  getStatusCardClass(item.status)
+                )}
               >
                 <div className="flex items-center gap-3.5 min-w-0">
                   <span className="font-mono text-xs font-bold text-zinc-400 shrink-0">

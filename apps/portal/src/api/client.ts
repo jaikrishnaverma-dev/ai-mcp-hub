@@ -130,6 +130,21 @@ export interface ActivityItem {
   createdAt: string;
 }
 
+export interface ItemDetailResponse {
+  item: TaskItem & {
+    estimateMin?: number | null;
+    tz?: string;
+    updatedAt?: string;
+    startAt?: string | null;
+    endAt?: string | null;
+    deletedAt?: string | null;
+  };
+  decisions: Array<{ id: string; summary: string; rationale: string; createdAt: string }>;
+  blockers: Array<{ id: string; reason: string; resolvedAt: string | null; createdAt: string }>;
+  links: Array<{ id: string; kind: string; targetId: string; targetTitle: string; direction: string }>;
+  history: Array<{ id: string; action: string; actorType: string; changes: unknown[]; reason: string | null; createdAt: string }>;
+}
+
 // ─── Auth state ───────────────────────────────────────────────────────────────
 
 const AUTH_KEY = 'assistant_user_id';
@@ -410,6 +425,7 @@ export const api = {
     if (params?.limit) q.set('limit', String(params.limit));
     return fetchJson<{ items: TaskItem[] }>(`/api/items?${q}`);
   },
+  getItem: (id: string) => fetchJson<ItemDetailResponse>(`/api/items/${id}`),
   createTask: (data: {
     title: string;
     description?: string;

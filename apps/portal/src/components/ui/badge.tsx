@@ -29,7 +29,7 @@ const badgeVariants = cva(
         blocked:
           "border-red-200/80 bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800/60 shadow-2xs",
         cancelled:
-          "border-zinc-200/60 bg-zinc-100/70 text-zinc-500 dark:bg-zinc-900/60 dark:text-zinc-500 dark:border-zinc-800 line-through",
+          "border-rose-200/80 bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800/60 line-through shadow-2xs",
       },
     },
     defaultVariants: {

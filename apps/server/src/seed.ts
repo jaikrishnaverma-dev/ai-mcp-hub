@@ -58,6 +58,7 @@ async function seed() {
       'log_decision',
       'link_tasks',
       'set_blocker',
+      'delete_task',
     ],
     instructions: `You are Jai's Daily Assistant. Your job is to help Jai stay organized and productive.
 

@@ -12,6 +12,11 @@ import type {
   ActorType,
   EndpointScope,
   EndpointStatus,
+  NotificationChannel,
+  NotificationType,
+  ReminderState,
+  ReminderTrigger,
+  CalendarEventStatus,
 } from '../constants/index.js';
 
 // --- Service context passed to every service method ---
@@ -110,4 +115,90 @@ export interface ToolResult {
     text: string;
   }>;
   isError?: boolean;
+}
+
+// ==========================================
+// Phase 2 Types — Calendar & Notifications
+// ==========================================
+
+// --- Reminder ---
+export interface IReminder {
+  itemId: string;
+  ownerId: string;
+  trigger: ReminderTrigger;
+  triggerAt: Date;
+  offsetMinutes?: number;
+  state: ReminderState;
+  channels: NotificationChannel[];
+  sentAt?: Date;
+  failReason?: string;
+  createdAt: Date;
+}
+
+// --- Notification Preference ---
+export interface INotificationPreference {
+  userId: string;
+  channels: NotificationChannel[];
+  telegramChatId?: string;
+  emailAddress?: string;
+  quietHoursStart?: string; // HH:mm in user tz
+  quietHoursEnd?: string;
+  enabledTypes: NotificationType[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// --- Web Push Subscription ---
+export interface IPushSubscription {
+  userId: string;
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  userAgent?: string;
+  createdAt: Date;
+}
+
+// --- Notification Log (audit trail for sent notifications) ---
+export interface INotificationLog {
+  recipientId: string;
+  type: NotificationType;
+  channel: NotificationChannel;
+  title: string;
+  body: string;
+  itemId?: string;
+  reminderId?: string;
+  success: boolean;
+  error?: string;
+  sentAt: Date;
+}
+
+// --- Calendar Event View (flattened from Item of type 'event') ---
+export interface CalendarEventView {
+  id: string;
+  title: string;
+  startAt: string;
+  endAt: string;
+  dueAt: string | null;
+  rrule: string | null;
+  status: CalendarEventStatus;
+  priority: ItemPriority;
+  tz: string;
+  parentId: string | null;
+  parentTitle: string | null;
+}
+
+// --- Conflict (returned by conflict detection) ---
+export interface CalendarConflict {
+  eventA: { id: string; title: string; startAt: string; endAt: string };
+  eventB: { id: string; title: string; startAt: string; endAt: string };
+  overlapMinutes: number;
+}
+
+// --- Free Slot ---
+export interface FreeSlot {
+  startAt: string;
+  endAt: string;
+  durationMinutes: number;
 }

@@ -277,8 +277,8 @@ export function CatalogView({
         <button
           onClick={() => setActiveTab('tools')}
           className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-colors ${activeTab === 'tools'
-              ? 'bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950 shadow-xs'
-              : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50'
+            ? 'bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950 shadow-xs'
+            : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50'
             }`}
         >
           <Wrench className="h-3.5 w-3.5" />
@@ -288,8 +288,8 @@ export function CatalogView({
         <button
           onClick={() => setActiveTab('skills')}
           className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-colors ${activeTab === 'skills'
-              ? 'bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950 shadow-xs'
-              : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50'
+            ? 'bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950 shadow-xs'
+            : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50'
             }`}
         >
           <Sparkles className="h-3.5 w-3.5" />
@@ -299,8 +299,8 @@ export function CatalogView({
         <button
           onClick={() => setActiveTab('external')}
           className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-colors ${activeTab === 'external'
-              ? 'bg-purple-600 text-white shadow-xs'
-              : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50'
+            ? 'bg-purple-600 text-white shadow-xs'
+            : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50'
             }`}
         >
           <Plug className="h-3.5 w-3.5" />
@@ -342,8 +342,8 @@ export function CatalogView({
                     <button
                       onClick={() => handleToggleLike(skill.id, skill.name)}
                       className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-semibold shrink-0 transition-colors ${isLiked
-                          ? 'border-red-200 bg-red-50 text-red-600'
-                          : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-600 hover:bg-zinc-50'
+                        ? 'border-red-200 bg-red-50 text-red-600'
+                        : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-600 hover:bg-zinc-50'
                         }`}
                     >
                       <Heart className={`h-3.5 w-3.5 ${isLiked ? 'fill-current text-red-600' : ''}`} />
@@ -415,8 +415,8 @@ export function CatalogView({
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
                 className={`rounded-xl px-3 py-1.5 text-xs font-medium capitalize transition-colors ${selectedCategory === cat
-                    ? 'bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950'
-                    : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 hover:bg-zinc-50'
+                  ? 'bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950'
+                  : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 hover:bg-zinc-50'
                   }`}
               >
                 {cat === 'all' ? 'All Categories' : cat}
@@ -638,7 +638,7 @@ export function CatalogView({
                 Reset Details
               </button>
             </div>
-            
+
             <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
               {currentUser ? (
                 <>
@@ -664,7 +664,7 @@ export function CatalogView({
                 <Plug className="h-3.5 w-3.5" />
                 <span>{extSaving ? 'Connecting...' : 'Connect Spent App (1-Click)'}</span>
               </button>
-              
+
               <a
                 href={spentDetails?.verifyUrl || 'https://apptiva.in/login'}
                 target="_blank"

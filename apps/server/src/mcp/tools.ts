@@ -19,6 +19,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
   createTaskInput,
   updateTaskInput,
+  deleteTaskInput,
   completeTaskInput,
   listTasksInput,
   getTaskInput,
@@ -94,7 +95,7 @@ export function registerP1Tools(): void {
   toolRegistry.register({
     name: 'create_task',
     description:
-      'Create a new task. Optionally assign it to a story via parentId. ' +
+      'Create a new task, story, subtask, or goal. Optionally group it under a parent item (task, story, or goal) via parentId. ' +
       'Set priority (critical/high/medium/low/none) and deadline (dueAt as ISO 8601). ' +
       'Include a reason to record WHY this task was created.',
     inputSchema: zodToJsonSchema(createTaskInput) as Record<string, unknown>,
@@ -102,7 +103,7 @@ export function registerP1Tools(): void {
     handler: wrapHandler(async (args, ctx) => {
       const input = createTaskInput.parse(args);
       const result = await itemsService.createItem(
-        { type: 'task', ...input, description: input.description },
+        { ...input, type: input.type || 'task', description: input.description },
         ctx,
       );
       return {
@@ -110,7 +111,7 @@ export function registerP1Tools(): void {
           {
             type: 'text',
             text: JSON.stringify({
-              message: `Task "${result.item.title}" created successfully.`,
+              message: `${result.item.type.charAt(0).toUpperCase() + result.item.type.slice(1)} "${result.item.title}" created successfully.`,
               task: result.item,
               activityId: result.activity.id,
             }, null, 2),
@@ -306,6 +307,32 @@ export function registerP1Tools(): void {
               message: `Blocker set: "${result.blocker.reason}"${result.taskStatusUpdated ? ' (task status changed to blocked)' : ''}`,
               blocker: result.blocker,
               taskStatusUpdated: result.taskStatusUpdated,
+            }, null, 2),
+          },
+        ],
+      };
+    }),
+  });
+
+  // --- 10. delete_task ---
+  toolRegistry.register({
+    name: 'delete_task',
+    description:
+      'Soft-delete a task and all its subtasks. Can be recovered later. ' +
+      'Include a reason explaining WHY the task was deleted.',
+    inputSchema: zodToJsonSchema(deleteTaskInput) as Record<string, unknown>,
+    requiredScope: 'write',
+    handler: wrapHandler(async (args, ctx) => {
+      const input = deleteTaskInput.parse(args);
+      const result = await itemsService.softDeleteItem(input.taskId, input.reason, ctx);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              message: `Task ${input.taskId} soft-deleted (${result.deletedCount} items total including descendants).`,
+              deletedCount: result.deletedCount,
+              deletedIds: result.deletedIds,
             }, null, 2),
           },
         ],

@@ -21,6 +21,7 @@ const objectIdString = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid ObjectId');
 export const createTaskInput = z.object({
   title: z.string().min(1, 'Title is required').max(500),
   description: z.string().max(5000).optional(),
+  type: z.enum(ITEM_TYPES).default('task'),
   parentId: objectIdString.optional(),
   priority: z.enum(ITEM_PRIORITIES).default('medium'),
   dueAt: z.string().datetime({ offset: true }).optional(),
@@ -29,6 +30,12 @@ export const createTaskInput = z.object({
   requestId: z.string().max(100).optional(),
 });
 export type CreateTaskInput = z.infer<typeof createTaskInput>;
+
+export const deleteTaskInput = z.object({
+  taskId: objectIdString,
+  reason: z.string().max(1000).optional(),
+});
+export type DeleteTaskInput = z.infer<typeof deleteTaskInput>;
 
 export const createGoalInput = z.object({
   title: z.string().min(1).max(500),

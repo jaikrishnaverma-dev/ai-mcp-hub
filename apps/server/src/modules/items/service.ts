@@ -74,24 +74,12 @@ async function validateParent(
   ownerId: string,
   session?: mongoose.ClientSession,
 ): Promise<ItemDocument | null> {
-  const expectedParentType = VALID_PARENT_TYPES[type];
-
-  if (expectedParentType === null) {
-    // This type should have no parent
-    if (parentId) {
-      throw new ValidationError(`${type} cannot have a parent item`);
+  // Standalone items without parent
+  if (!parentId) {
+    if (type === 'subtask') {
+      throw new ValidationError('subtask requires a parentId (must be a task or story)');
     }
     return null;
-  }
-
-  // Tasks can be standalone (e.g. quick inbox tasks)
-  if (type === 'task' && !parentId) {
-    return null;
-  }
-
-  // Other types (story, subtask) require a parent
-  if (!parentId) {
-    throw new ValidationError(`${type} requires a parentId (must be a ${expectedParentType})`);
   }
 
   const parent = await Item.findById(parentId).session(session ?? null);
@@ -99,9 +87,26 @@ async function validateParent(
   if (parent.ownerId.toString() !== ownerId) {
     throw new ForbiddenError('Cannot create items under another user\'s item');
   }
-  if (parent.type !== expectedParentType) {
+
+  // Allowed parent types for flexible hierarchy:
+  // - subtask: task or story
+  // - task: story, goal, or another task (sub-tasking / grouping)
+  // - story: goal or another story (or standalone)
+  // - goal: another goal
+  // - note / event: task, story, or goal
+  const allowedParents: Record<ItemType, ItemType[]> = {
+    subtask: ['task', 'story'],
+    task: ['story', 'goal', 'task'],
+    story: ['goal', 'story'],
+    goal: ['goal'],
+    note: ['goal', 'story', 'task'],
+    event: ['goal', 'story', 'task'],
+  };
+
+  const allowed = allowedParents[type];
+  if (allowed && !allowed.includes(parent.type)) {
     throw new ValidationError(
-      `${type} parent must be a ${expectedParentType}, got ${parent.type}`,
+      `${type} parent must be one of [${allowed.join(', ')}], got ${parent.type}`,
     );
   }
 
