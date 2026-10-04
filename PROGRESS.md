@@ -108,6 +108,30 @@
   - **Settings View**: Account card and OAuth 2.0 credentials card skeletons.
   - **OAuth Consent View**: Full client authorization card skeleton replacing the previous spinner.
 
+**9. Husky Pre-Commit Hook & MCP Tools Quality Suite:**
+- Installed `husky` v9.1.7 and configured `.husky/pre-commit` to gate every `git commit`.
+- Created comprehensive MCP quality test suite in [`apps/server/src/mcp/mcp.test.ts`](file:///Applications/XAMPP/xamppfiles/htdocs/todo-assistance/apps/server/src/mcp/mcp.test.ts) (18 unit tests):
+  - Validates registry completeness (all 19 Phase 1 & 2 tools registered with zero duplicates).
+  - Enforces `snake_case` naming conventions and descriptive AI-agent prompts (minimum 20 characters).
+  - Validates JSON Schema objects, permissions (`read`, `write`, `destructive`), and security allowlist filtering.
+  - Intercepts Zod validation failures in `wrapHandler` and returns structured `{ error: 'VALIDATION_ERROR', issues: [...] }` without crashing the process.
+- Hook runs both `pnpm run test:mcp` and `pnpm test` (37 total tests) on every commit.
+
+**10. Mobile Hierarchy UI Overhaul (Data Explorer):**
+- Resolved severe horizontal text truncation (`F..`, `S...`) on mobile devices (< 640px) across Goals, Stories, Tasks, Standalone Tasks, and Flat List views in [`apps/portal/src/components/DataBrowserView.tsx`](file:///Applications/XAMPP/xamppfiles/htdocs/todo-assistance/apps/portal/src/components/DataBrowserView.tsx):
+  - Converted single crowded horizontal rows into responsive two-row cards.
+  - **Row 1**: Item type ticker badge + readable wrapped title (`line-clamp-2`, `break-words`) + primary action (`✓` complete button) + compact mobile dropdown menu (`MoreVertical`) containing Reopen/Cancel and Delete.
+  - **Row 2**: Metadata badges row (`StatusBadge`, `PriorityBadge`, due dates, creation date).
+  - Reduced indentation on small screens from `pl-6` to compact vertical colored borders (`pl-2 sm:pl-3.5 border-l-2`).
+  - Desktop preserves inline button controls.
+
+**11. Local Dev Server & Auth Resolution:**
+- Resolved `POST http://localhost:5173/api/auth/login 500 (Internal Server Error)`:
+  - Root cause: Node ESM module loader failed to resolve named export `RRule` from the CommonJS `rrule` package on server startup, causing the backend on port 3000 to exit. The Vite dev server on port 5173 then proxied `/api` to a closed port and responded with 500.
+  - Implemented safe hybrid ESM/CJS import extraction for `RRule` in [`apps/server/src/modules/calendar/service.ts`](file:///Applications/XAMPP/xamppfiles/htdocs/todo-assistance/apps/server/src/modules/calendar/service.ts).
+  - Confirmed local server boots cleanly and `/api/auth/login` returns HTTP 200 OK.
+  - Deployed verified build to production on `https://mcphub.apptiva.in`.
+
 ---
 
 ### Session 1 — 2026-10-04
