@@ -13,8 +13,8 @@ const objectIdString = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid ObjectId');
 
 export const createWorkflowInput = z.object({
   name: z.string().min(1).max(100).describe('Human-readable workflow name'),
-  toolAllowlist: z.array(z.string().min(1)).min(1).max(15)
-    .describe('Tool names this workflow exposes (max 15)'),
+  toolAllowlist: z.array(z.string().min(1)).min(1).max(20)
+    .describe('Tool names this workflow exposes (max 20)'),
   instructions: z.string().max(10000).optional()
     .describe('Workflow prompt returned to AI clients at connection'),
   scopes: z.array(z.enum(ENDPOINT_SCOPES)).min(1)
@@ -25,7 +25,7 @@ export type CreateWorkflowInput = z.infer<typeof createWorkflowInput>;
 export const updateWorkflowInput = z.object({
   endpointId: objectIdString,
   name: z.string().min(1).max(100).optional(),
-  toolAllowlist: z.array(z.string().min(1)).min(1).max(15).optional(),
+  toolAllowlist: z.array(z.string().min(1)).min(1).max(20).optional(),
   instructions: z.string().max(10000).optional(),
   scopes: z.array(z.enum(ENDPOINT_SCOPES)).min(1).optional(),
   status: z.enum(ENDPOINT_STATUSES).optional(),

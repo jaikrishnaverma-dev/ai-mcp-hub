@@ -127,8 +127,8 @@ export function WorkflowsView({ currentUser, onRequireAuth }: WorkflowsViewProps
     if (selectedTools.includes(toolName)) {
       setSelectedTools(selectedTools.filter((t) => t !== toolName));
     } else {
-      if (selectedTools.length >= 15) {
-        setFormError('Workflows are limited to 15 tools max for optimal AI token budget.');
+      if (selectedTools.length >= 20) {
+        setFormError('Workflows are limited to 20 tools max for optimal AI token budget.');
         return;
       }
       setSelectedTools([...selectedTools, toolName]);
@@ -598,15 +598,15 @@ export function WorkflowsView({ currentUser, onRequireAuth }: WorkflowsViewProps
             <div className="space-y-2 pt-1 min-w-0 w-full">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                  Allowed Tools ({selectedTools.length}/15 max)
+                  Allowed Tools ({selectedTools.length}/20 max)
                 </Label>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setSelectedTools(tools.map((t) => t.name))}
+                    onClick={() => setSelectedTools(tools.slice(0, 20).map((t) => t.name))}
                     className="text-xs text-zinc-900 dark:text-zinc-100 font-semibold hover:underline"
                   >
-                    Select All
+                    Select All (up to 20)
                   </button>
                   <span className="text-xs text-zinc-300 dark:text-zinc-700">•</span>
                   <button

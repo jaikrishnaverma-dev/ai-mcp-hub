@@ -87,7 +87,7 @@ Portal → REST API → Domain Services (same)
 - `tools/call` **re-checks** allowlist — filtering the list alone is NOT security
 - Endpoint slug is routing, NOT authentication — access requires valid OAuth token
 - Effective permission = token scopes ∩ endpoint allowlist ∩ user's data permissions
-- Each endpoint ≤ 15 tools
+- Each endpoint ≤ 20 tools
 - Destructive tools require server-side two-step confirmation (token + consequence summary)
 
 ---
@@ -192,7 +192,7 @@ apps/server/src/modules/{items,links,activity,decisions,blockers,calendar,notes,
 7. ❌ Don't log tokens, passwords, or item bodies at info level
 8. ❌ Don't assume timezone — always use the user's IANA tz setting
 9. ❌ Don't duplicate logic between MCP handlers and REST handlers — share services
-10. ❌ Don't make tools too granular or too broad — intent-based, ~15 per endpoint max
+10. ❌ Don't make tools too granular or too broad — intent-based, ~20 per endpoint max
 
 ---
 

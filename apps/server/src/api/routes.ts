@@ -538,7 +538,7 @@ apiRouter.get(['/endpoints', '/workflows'], async (req: Request, res: Response, 
 // Create new MCP Endpoint
 const createEndpointSchema = z.object({
   name: z.string().min(1).max(100),
-  toolAllowlist: z.array(z.string()).min(1).max(15),
+  toolAllowlist: z.array(z.string()).min(1).max(20),
   instructions: z.string().optional(),
   slug: z.string().optional(),
 });
@@ -586,8 +586,8 @@ apiRouter.patch(['/endpoints/:id', '/workflows/:id'], async (req: Request, res: 
 
     if (status) endpoint.status = status;
     if (toolAllowlist && Array.isArray(toolAllowlist)) {
-      if (toolAllowlist.length > 15) {
-        res.status(400).json({ error: 'BAD_REQUEST', message: 'Tool allowlist cannot exceed 15 tools' });
+      if (toolAllowlist.length > 20) {
+        res.status(400).json({ error: 'BAD_REQUEST', message: 'Tool allowlist cannot exceed 20 tools' });
         return;
       }
       endpoint.toolAllowlist = toolAllowlist;

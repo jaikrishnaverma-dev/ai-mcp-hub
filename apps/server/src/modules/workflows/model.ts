@@ -50,8 +50,8 @@ const workflowSchema = new Schema<WorkflowDocument>(
       type: [String],
       required: true,
       validate: {
-        validator: (v: string[]) => v.length >= 1 && v.length <= 15,
-        message: 'Workflows must have 1-15 tools',
+        validator: (v: string[]) => v.length >= 1 && v.length <= 20,
+        message: 'Workflows must have 1-20 tools',
       },
     },
     instructions: {
