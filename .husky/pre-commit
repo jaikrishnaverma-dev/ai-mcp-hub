@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e
+
+echo "🔍 [Husky Hook] Running MCP Tools Quality Assurance Suite..."
+pnpm run test:mcp
+
+echo "🧪 [Husky Hook] Running full workspace test suite..."
+pnpm test
+
+echo "✅ [Husky Hook] All MCP tools and workspace tests passed!"

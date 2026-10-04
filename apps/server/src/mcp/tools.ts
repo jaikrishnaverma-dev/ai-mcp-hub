@@ -16,6 +16,7 @@
  * 9. set_blocker (write)
  */
 import { zodToJsonSchema } from 'zod-to-json-schema';
+import { ZodError } from 'zod';
 import {
   createTaskInput,
   updateTaskInput,
@@ -58,6 +59,21 @@ function wrapHandler(
     try {
       return await handler(args, ctx);
     } catch (err) {
+      if (err instanceof ZodError) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                error: 'VALIDATION_ERROR',
+                message: 'Invalid tool arguments',
+                issues: err.errors.map(e => ({ path: e.path.join('.'), message: e.message })),
+              }, null, 2),
+            },
+          ],
+          isError: true,
+        };
+      }
       if (err instanceof AppError) {
         return {
           content: [

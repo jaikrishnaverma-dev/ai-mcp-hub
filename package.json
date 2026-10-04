@@ -9,10 +9,13 @@
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
-    "clean": "turbo clean"
+    "test:mcp": "pnpm --filter @assistant/server exec vitest run src/mcp/mcp.test.ts",
+    "clean": "turbo clean",
+    "prepare": "husky"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
+    "husky": "^9.1.7",
     "turbo": "^2.5.0",
     "typescript": "^5.7.0"
   },

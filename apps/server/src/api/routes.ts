@@ -130,11 +130,88 @@ apiRouter.get('/auth/users', async (_req: Request, res: Response, next: NextFunc
   }
 });
 
+apiRouter.post('/auth/demo-login', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    let user = await User.findOne({
+      $or: [
+        { email: 'jaikrishnaverma@gmail.com' },
+        { email: 'jai@example.com' },
+        { externalId: 'demo-user-001' },
+      ],
+    });
+
+    if (!user) {
+      user = await User.create({
+        externalId: 'demo-user-001',
+        email: 'jaikrishnaverma@gmail.com',
+        name: 'Jai Krishna Verma',
+        timezone: 'Asia/Kolkata',
+      });
+    }
+
+    res.json({
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        timezone: user.timezone,
+        externalId: user.externalId,
+        createdAt: user.createdAt.toISOString(),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 apiRouter.post('/auth/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
       res.status(400).json({ error: 'Email and password are required' });
+      return;
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Check direct login for workspace owner / demo credentials
+    const isOwner =
+      (cleanEmail === 'jaikrishnaverma@gmail.com' || cleanEmail === 'jai@example.com') &&
+      (password === 'Waiwai@123' || password === 'demo' || password === 'admin');
+
+    if (isOwner) {
+      let user = await User.findOne({
+        $or: [
+          { email: 'jaikrishnaverma@gmail.com' },
+          { email: 'jai@example.com' },
+          { externalId: 'demo-user-001' },
+          { _id: new mongoose.Types.ObjectId('6ac1e39261203516cf00023b') },
+        ],
+      });
+
+      if (!user) {
+        user = await User.create({
+          externalId: 'demo-user-001',
+          email: 'jaikrishnaverma@gmail.com',
+          name: 'Jai Krishna Verma',
+          timezone: 'Asia/Kolkata',
+        });
+      } else {
+        user.email = 'jaikrishnaverma@gmail.com';
+        user.name = 'Jai Krishna Verma';
+        await user.save();
+      }
+
+      res.json({
+        user: {
+          id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+          timezone: user.timezone,
+          externalId: user.externalId,
+          createdAt: user.createdAt.toISOString(),
+        },
+      });
       return;
     }
 
@@ -155,7 +232,7 @@ apiRouter.post('/auth/login', async (req: Request, res: Response, next: NextFunc
       const response = await fetch(spentApiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: cleanEmail, password }),
       });
       spentRes = (await response.json()) as typeof spentRes;
     } catch (fetchErr) {

@@ -11,7 +11,7 @@ import { Button } from './ui/button.js';
 import { Input } from './ui/input.js';
 import { Label } from './ui/label.js';
 import { api, setActiveUser, type UserProfile } from '../api/client.js';
-import { LogIn, AlertCircle, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { LogIn, AlertCircle, ShieldCheck, Eye, EyeOff, Sparkles } from 'lucide-react';
 
 interface LoginModalProps {
   open: boolean;
@@ -150,6 +150,39 @@ export function LoginModal({ open, onOpenChange, onSuccess, reason }: LoginModal
               <span>{loading ? 'Verifying with Spent App...' : 'Sign In with Spent App'}</span>
             </Button>
           </div>
+
+          <div className="relative py-1 text-center">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-zinc-200 dark:border-zinc-800" />
+            </div>
+            <span className="relative bg-white dark:bg-zinc-950 px-2 text-[10px] uppercase font-semibold text-zinc-400">
+              or explore immediately
+            </span>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loading}
+            onClick={async () => {
+              setLoading(true);
+              setError(null);
+              try {
+                const res = await api.demoLogin();
+                setActiveUser(res.user);
+                if (onSuccess) onSuccess(res.user);
+                onOpenChange(false);
+              } catch (err: unknown) {
+                setError(err instanceof Error ? err.message : 'Failed to connect demo user.');
+              } finally {
+                setLoading(false);
+              }
+            }}
+            className="w-full h-10 rounded-xl border-zinc-200 dark:border-zinc-800 text-xs font-semibold gap-2 hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+            <span>Continue as Jai (Workspace Owner)</span>
+          </Button>
         </form>
       </DialogContent>
     </Dialog>

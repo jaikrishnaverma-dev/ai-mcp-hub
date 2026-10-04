@@ -103,7 +103,7 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
     setLoading(true);
     try {
       const [tRes, bRes, dRes, aRes] = await Promise.all([
-        api.getItems({ limit: 100 }).catch(() => ({ items: [] })),
+        api.getItems({ limit: 100 }),
         api.getBlockers().catch(() => ({ blockers: [] })),
         api.getDecisions().catch(() => ({ decisions: [] })),
         api.getActivity().catch(() => ({ activities: [] })),
@@ -112,8 +112,12 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
       setBlockers(bRes.blockers || []);
       setDecisions(dRes.decisions || []);
       setActivities(aRes.activities || []);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to load explorer data:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Authentication required') || msg.includes('401') || msg.includes('UNAUTHORIZED')) {
+        onRequireAuth('Authentication required. Please sign in to load your workspace data.');
+      }
     } finally {
       setLoading(false);
     }

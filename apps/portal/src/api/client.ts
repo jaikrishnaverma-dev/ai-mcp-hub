@@ -335,6 +335,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  demoLogin: () =>
+    fetchJson<{ user: UserProfile }>('/api/auth/demo-login', {
+      method: 'POST',
+    }),
   getMe: () => fetchJson<{ user: UserProfile | null }>('/api/auth/me'),
   getUsers: () => fetchJson<{ users: UserProfile[] }>('/api/auth/users'),
 

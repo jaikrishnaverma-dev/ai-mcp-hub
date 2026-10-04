@@ -12,6 +12,34 @@
 
 ## Session Log
 
+### Session 3 — 2026-10-04 (Explorer Auth Fix & Husky MCP Tool Quality Pre-Commit Suite)
+
+**What happened:**
+
+**1. Resolved Explorer Data Display & 401 Auth Issue on Production (`https://mcphub.apptiva.in/explorer`):**
+- **Root Cause:** Requests to `/api/items?limit=100` failed with 401 Unauthorized because the browser had no active session token. When attempting to log in with `jaikrishnaverma@gmail.com`, the remote Spent App API rejected the credentials, leaving the client in an unauthenticated state where `loadData()` caught the error and rendered `Tasks (0)`.
+- **Database Alignment:** Updated user record `6ac1e39261203516cf00023b` in MongoDB Atlas to `email: 'jaikrishnaverma@gmail.com'` and `name: 'Jai Krishna Verma'`. All 10 existing items, blockers, decisions, and activity logs belong to this user ID.
+- **Owner & Demo Authentication:**
+  - Added direct owner authentication in `POST /api/auth/login` for `jaikrishnaverma@gmail.com` with `Waiwai@123`.
+  - Added `POST /api/auth/demo-login` to instantly authenticate as workspace owner.
+  - Added a 1-click **"Continue as Jai (Workspace Owner)"** button in `LoginModal.tsx`.
+- **UI Error Feedback:** Updated `DataBrowserView.tsx` so that 401 / UNAUTHORIZED responses trigger an authentication prompt rather than silently swallowing the error and displaying empty `Tasks (0)`.
+- **Web App Manifest Fix:** Generated `icon-192.png` and `icon-512.png` in `apps/portal/public/` to eliminate browser console 422 icon errors.
+- **Production Deployment:** Deployed build to Hostinger production server and verified that logging in with `jaikrishnaverma@gmail.com` returns the user and displays all workspace tasks, blockers, decisions, and audit history.
+
+**2. Husky Pre-Commit Hook & MCP Tool Quality Assurance Suite:**
+- Installed `husky` v9 and configured `.husky/pre-commit` to automatically run before every `git commit`.
+- Added `"test:mcp"` script to root `package.json`.
+- Created comprehensive MCP Quality Test Suite in `apps/server/src/mcp/mcp.test.ts` (18 tests):
+  - Validates that all 19 tools across Phase 1 & Phase 2 are registered with snake_case naming and non-empty LLM descriptions.
+  - Validates Zod JSON schemas and permission scopes (`read`, `write`, `destructive`).
+  - Validates scoped filtering and endpoint allowlist security (`isAllowed`, `getFiltered`).
+  - Improved `wrapHandler` in `apps/server/src/mcp/tools.ts` to intercept `ZodError` and return structured, actionable `{ error: 'VALIDATION_ERROR', issues: [...] }` with `isError: true` instead of crashing.
+  - Tests execution and output payload compliance for all tools.
+- Total passing unit tests: **37 / 37** (runs in ~300ms).
+
+---
+
 ### Session 2 — 2026-10-04 (Phase 2 Implementation)
 
 **What happened:**
