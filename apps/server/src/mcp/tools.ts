@@ -152,9 +152,9 @@ export function registerP1Tools(): void {
   toolRegistry.register({
     name: 'update_task',
     description:
-      'Update an existing task\'s fields: title, description, status, priority, dueAt, estimateMin. ' +
-      'Include a reason to record WHY the change was made. ' +
-      'Returns the updated task and a diff of what changed.',
+      'Update an existing task or story\'s fields: title, description, status, priority, dueAt, estimateMin. ' +
+      'Works for both tasks and user stories. Include a reason to record WHY the change was made. ' +
+      'Returns the updated item and a diff of what changed.',
     inputSchema: zodToJsonSchema(updateTaskInput) as Record<string, unknown>,
     requiredScope: 'write',
     handler: wrapHandler(async (args, ctx) => {
@@ -165,7 +165,8 @@ export function registerP1Tools(): void {
           {
             type: 'text',
             text: JSON.stringify({
-              message: `Task "${result.item.title}" updated. Changed: ${result.changes.map(c => c.field).join(', ')}.`,
+              message: `${result.item.type.charAt(0).toUpperCase() + result.item.type.slice(1)} "${result.item.title}" updated. Changed: ${result.changes.map(c => c.field).join(', ')}.`,
+              item: result.item,
               task: result.item,
               changes: result.changes,
               activityId: result.activity.id,
@@ -210,7 +211,7 @@ export function registerP1Tools(): void {
   toolRegistry.register({
     name: 'list_tasks',
     description:
-      'List tasks with optional filters: status, priority, parentId (story), dueBefore, dueAfter. ' +
+      'List tasks or stories with optional filters: type (task, story, goal, subtask), status, priority, parentId (story), dueBefore, dueAfter. ' +
       'Returns compact summaries (no full body). Paginated with limit/offset. ' +
       'Default limit: 20, max: 50.',
     inputSchema: zodToJsonSchema(listTasksInput) as Record<string, unknown>,
@@ -218,7 +219,7 @@ export function registerP1Tools(): void {
     handler: wrapHandler(async (args, ctx) => {
       const input = listTasksInput.parse(args);
       const result = await itemsService.listItems(
-        { type: 'task', ...input },
+        { type: input.type, ...input },
         ctx,
       );
       return {
@@ -226,7 +227,7 @@ export function registerP1Tools(): void {
           {
             type: 'text',
             text: JSON.stringify({
-              message: `Found ${result.total} task(s). Showing ${result.items.length}.`,
+              message: `Found ${result.total} item(s). Showing ${result.items.length}.`,
               ...result,
             }, null, 2),
           },
@@ -345,8 +346,8 @@ export function registerP1Tools(): void {
   toolRegistry.register({
     name: 'delete_task',
     description:
-      'Soft-delete a task and all its subtasks. Can be recovered later. ' +
-      'Include a reason explaining WHY the task was deleted.',
+      'Soft-delete a task or story and all its subtasks. Can be recovered later. ' +
+      'Works for both tasks and user stories. Include a reason explaining WHY the item was deleted.',
     inputSchema: zodToJsonSchema(deleteTaskInput) as Record<string, unknown>,
     requiredScope: 'write',
     handler: wrapHandler(async (args, ctx) => {
@@ -357,7 +358,60 @@ export function registerP1Tools(): void {
           {
             type: 'text',
             text: JSON.stringify({
-              message: `Task ${input.taskId} soft-deleted (${result.deletedCount} items total including descendants).`,
+              message: `Item ${input.taskId} soft-deleted (${result.deletedCount} items total including descendants).`,
+              deletedCount: result.deletedCount,
+              deletedIds: result.deletedIds,
+            }, null, 2),
+          },
+        ],
+      };
+    }),
+  });
+
+  // --- 11. update_story ---
+  toolRegistry.register({
+    name: 'update_story',
+    description:
+      'Update an existing user story\'s fields: title, description, status, priority, dueAt, estimateMin. ' +
+      'Pass taskId (the story ID) and fields to update. Include a reason explaining why the change was made.',
+    inputSchema: zodToJsonSchema(updateTaskInput) as Record<string, unknown>,
+    requiredScope: 'write',
+    handler: wrapHandler(async (args, ctx) => {
+      const input = updateTaskInput.parse(args);
+      const result = await itemsService.updateItem(input, ctx);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              message: `Story "${result.item.title}" updated. Changed: ${result.changes.map(c => c.field).join(', ')}.`,
+              story: result.item,
+              changes: result.changes,
+              activityId: result.activity.id,
+            }, null, 2),
+          },
+        ],
+      };
+    }),
+  });
+
+  // --- 12. delete_story ---
+  toolRegistry.register({
+    name: 'delete_story',
+    description:
+      'Soft-delete a user story and all its child tasks and subtasks. Can be recovered later. ' +
+      'Pass taskId (the story ID) and an optional reason explaining why it was deleted.',
+    inputSchema: zodToJsonSchema(deleteTaskInput) as Record<string, unknown>,
+    requiredScope: 'write',
+    handler: wrapHandler(async (args, ctx) => {
+      const input = deleteTaskInput.parse(args);
+      const result = await itemsService.softDeleteItem(input.taskId, input.reason, ctx);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              message: `Story ${input.taskId} soft-deleted (${result.deletedCount} items total including child tasks).`,
               deletedCount: result.deletedCount,
               deletedIds: result.deletedIds,
             }, null, 2),

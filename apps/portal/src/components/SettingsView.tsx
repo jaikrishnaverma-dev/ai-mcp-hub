@@ -69,6 +69,7 @@ export function SettingsView({ currentUser, onRequireAuth }: SettingsViewProps) 
             redirectUris: [
               'https://claude.ai/api/mcp/oauth/callback',
               'https://chatgpt.com/aip/g-assistant/oauth/callback',
+              'https://chatgpt.com/connector/oauth/*',
             ],
             scopes: ['read', 'write'],
           });
@@ -109,6 +110,7 @@ export function SettingsView({ currentUser, onRequireAuth }: SettingsViewProps) 
         redirectUris: [
           'https://claude.ai/api/mcp/oauth/callback',
           'https://chatgpt.com/aip/g-assistant/oauth/callback',
+          'https://chatgpt.com/connector/oauth/*',
         ],
         endpointId: selectedEndpoint?.id,
         scopes: ['read', 'write'],

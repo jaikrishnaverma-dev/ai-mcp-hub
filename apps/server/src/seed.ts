@@ -63,6 +63,8 @@ async function seed() {
       'link_tasks',
       'set_blocker',
       'delete_task',
+      'update_story',
+      'delete_story',
     ],
     instructions: `You are Jai's Daily Assistant. Your job is to help Jai stay organized and productive.
 
@@ -95,6 +97,7 @@ Be concise. Don't repeat information the user already knows. Focus on what's act
       'get_task',
       'link_tasks',
       'set_blocker',
+      'delete_task',
       'create_calendar_event',
       'get_calendar_view',
       'check_conflicts',

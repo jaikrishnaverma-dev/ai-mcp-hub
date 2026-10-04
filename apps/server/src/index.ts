@@ -110,6 +110,22 @@ async function main() {
     });
   }
 
+  // Global JSON error handler fallback (prevents Express default HTML error page)
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    logger.error({ err }, 'Unhandled request error');
+    if (res.headersSent) return;
+    const status = (err && typeof err === 'object' && 'statusCode' in err && typeof (err as { statusCode: unknown }).statusCode === 'number')
+      ? (err as { statusCode: number }).statusCode
+      : 500;
+    const message = err instanceof Error ? err.message : 'Internal Server Error';
+    res.status(status).json({
+      error: (err && typeof err === 'object' && 'code' in err && typeof (err as { code: unknown }).code === 'string')
+        ? (err as { code: string }).code
+        : 'INTERNAL_ERROR',
+      message,
+    });
+  });
+
   // 3. Start server
   const server = app.listen(PORT, HOST, () => {
     logger.info({ port: PORT, host: HOST }, 'Assistant server started');

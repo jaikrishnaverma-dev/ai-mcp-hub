@@ -76,6 +76,7 @@ export type UpdateTaskInput = z.infer<typeof updateTaskInput>;
 // --- Query inputs ---
 
 export const listTasksInput = z.object({
+  type: z.enum(ITEM_TYPES).optional().describe('Filter by item type (task, story, goal, subtask)'),
   status: z.enum(ITEM_STATUSES).optional(),
   priority: z.enum(ITEM_PRIORITIES).optional(),
   parentId: objectIdString.optional(),

@@ -150,9 +150,45 @@ export class OAuthService {
     if (client.redirectUris.length > 0) {
       const allowed = client.redirectUris.some((uri) => {
         try {
-          const clientUrl = new URL(uri);
+          if (uri === params.redirectUri) return true;
+
+          // Wildcard matching: e.g. https://chatgpt.com/* or https://chatgpt.com/connector/oauth/*
+          if (uri.endsWith('*') && params.redirectUri.startsWith(uri.slice(0, -1))) {
+            return true;
+          }
+
+          const cleanUri = uri.endsWith('*') ? uri.slice(0, -1) : uri;
+          const clientUrl = new URL(cleanUri);
           const reqUrl = new URL(params.redirectUri);
-          return clientUrl.origin === reqUrl.origin && clientUrl.pathname === reqUrl.pathname;
+
+          // 1. Strict origin & path match
+          if (clientUrl.origin === reqUrl.origin && clientUrl.pathname === reqUrl.pathname) {
+            return true;
+          }
+
+          // 2. ChatGPT official connector & GPT actions callbacks
+          const isChatGPTClient = clientUrl.hostname === 'chatgpt.com' || clientUrl.hostname.endsWith('.chatgpt.com');
+          const isChatGPTReq = reqUrl.hostname === 'chatgpt.com' || reqUrl.hostname.endsWith('.chatgpt.com');
+          if (
+            isChatGPTClient &&
+            isChatGPTReq &&
+            (reqUrl.pathname.startsWith('/connector/oauth/') || reqUrl.pathname.startsWith('/aip/'))
+          ) {
+            return true;
+          }
+
+          // 3. Claude AI official callbacks
+          const isClaudeClient = clientUrl.hostname === 'claude.ai' || clientUrl.hostname.endsWith('.claude.ai');
+          const isClaudeReq = reqUrl.hostname === 'claude.ai' || reqUrl.hostname.endsWith('.claude.ai');
+          if (
+            isClaudeClient &&
+            isClaudeReq &&
+            (reqUrl.pathname.startsWith('/api/mcp/oauth/') || reqUrl.pathname.startsWith('/oauth/'))
+          ) {
+            return true;
+          }
+
+          return false;
         } catch {
           return uri === params.redirectUri;
         }

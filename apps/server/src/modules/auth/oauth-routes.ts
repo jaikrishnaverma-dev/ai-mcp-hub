@@ -1,7 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { oauthService } from './oauth-service.js';
 import { User } from './model.js';
-import { ValidationError } from '../../errors.js';
+import { ValidationError, AppError } from '../../errors.js';
 import { createModuleLogger } from '../../config/index.js';
 
 const log = createModuleLogger('oauth-routes');
@@ -261,4 +261,23 @@ oauthRouter.delete('/api/oauth-clients/:clientId', async (req: Request, res: Res
   } catch (err) {
     next(err);
   }
+});
+
+/**
+ * Structured JSON error handler for OAuth API endpoints
+ */
+oauthRouter.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof AppError) {
+    res.status(err.statusCode).json({
+      error: err.code,
+      message: err.message,
+      ...('details' in err ? { details: (err as Record<string, unknown>)['details'] } : {}),
+    });
+    return;
+  }
+
+  res.status(500).json({
+    error: 'INTERNAL_ERROR',
+    message: err instanceof Error ? err.message : 'Unknown authorization error',
+  });
 });

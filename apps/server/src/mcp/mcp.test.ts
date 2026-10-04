@@ -175,6 +175,8 @@ describe('MCP Tools Quality Suite', () => {
     'create_task',
     'update_task',
     'delete_task',
+    'update_story',
+    'delete_story',
     'complete_task',
     'list_tasks',
     'get_task',
@@ -205,7 +207,7 @@ describe('MCP Tools Quality Suite', () => {
   });
 
   describe('Registry & Schema Quality Checks', () => {
-    it('registers all 19 required tools with no duplicates', () => {
+    it(`registers all ${EXPECTED_TOOLS.length} required tools with no duplicates`, () => {
       const allTools = toolRegistry.getAll();
       const toolNames = allTools.map((t) => t.name);
 

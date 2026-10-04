@@ -205,8 +205,23 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { ...init, headers });
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    const message = (body['message'] as string | undefined) || `HTTP ${res.status}`;
+    let message = `HTTP ${res.status}`;
+    try {
+      const text = await res.text();
+      try {
+        const body = JSON.parse(text) as Record<string, unknown>;
+        message = (body['message'] as string | undefined) ||
+                  (body['error_description'] as string | undefined) ||
+                  (body['error'] as string | undefined) ||
+                  `HTTP ${res.status}`;
+      } catch {
+        if (text && text.length < 200 && !text.includes('<html')) {
+          message = text.trim();
+        }
+      }
+    } catch {
+      // fallback
+    }
     throw new Error(message);
   }
 
