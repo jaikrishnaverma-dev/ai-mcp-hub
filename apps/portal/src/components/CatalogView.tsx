@@ -41,6 +41,7 @@ import {
 } from './ui/dialog.js';
 import { Button } from './ui/button.js';
 import { Textarea } from './ui/textarea.js';
+import { Skeleton } from './ui/skeleton.js';
 
 interface CatalogViewProps {
   currentUser: UserProfile | null;
@@ -80,8 +81,10 @@ export function CatalogView({
 
   // Schema dialog
   const [inspectTool, setInspectTool] = useState<McpTool | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const loadData = async () => {
+    setLoading(true);
     try {
       const [catRes, extRes] = await Promise.all([
         api.getToolCatalog().catch(() => ({ tools: [] })),
@@ -91,6 +94,8 @@ export function CatalogView({
       setExternalMcps(extRes.integrations || []);
     } catch (err) {
       console.error('Failed to load catalog data:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -425,7 +430,31 @@ export function CatalogView({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
-            {filteredTools.map((tool) => {
+            {loading && tools.length === 0 ? (
+              <>
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div
+                    key={i}
+                    className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-xs space-y-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                      <Skeleton className="h-4 w-12 rounded-full" />
+                    </div>
+                    <Skeleton className="h-6 w-40 rounded-lg" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-3.5 w-full rounded" />
+                      <Skeleton className="h-3.5 w-4/5 rounded" />
+                    </div>
+                    <div className="pt-2 flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800">
+                      <Skeleton className="h-4 w-24 rounded" />
+                      <Skeleton className="h-7 w-20 rounded-xl" />
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              filteredTools.map((tool) => {
               const isLiked = Boolean(likes[tool.name]);
               const commentsCount = getStoredComments(tool.name).length;
               const category = categorizeTool(tool.name);
@@ -505,7 +534,7 @@ export function CatalogView({
                   </div>
                 </div>
               );
-            })}
+            }))}
           </div>
         </div>
       )}

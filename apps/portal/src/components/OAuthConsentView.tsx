@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, type OAuthClientInfoResponse, type UserProfile } from '../api/client.js';
 import { ShieldCheck, Bot, Check, AlertCircle, ArrowRight, ExternalLink, Sparkles } from 'lucide-react';
 import { Button } from './ui/button.js';
+import { Skeleton } from './ui/skeleton.js';
 
 interface OAuthConsentViewProps {
   currentUser: UserProfile | null;
@@ -105,10 +106,27 @@ export function OAuthConsentView({ currentUser, onRequireAuth }: OAuthConsentVie
 
   if (loading) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center p-4">
-        <div className="text-center space-y-3">
-          <div className="mx-auto h-10 w-10 border-2 border-zinc-900 border-t-transparent dark:border-zinc-100 dark:border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs font-mono text-zinc-500">Validating client authorization...</p>
+      <div className="min-h-[75vh] flex items-center justify-center p-4">
+        <div className="max-w-md w-full rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 space-y-6 shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-12 w-12 rounded-2xl" />
+            <div className="space-y-1.5 flex-1">
+              <Skeleton className="h-5 w-3/4 rounded" />
+              <Skeleton className="h-3 w-1/2 rounded" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full rounded" />
+            <Skeleton className="h-4 w-5/6 rounded" />
+          </div>
+          <div className="p-3.5 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 space-y-2">
+            <Skeleton className="h-3.5 w-32 rounded" />
+            <Skeleton className="h-8 w-full rounded-lg" />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Skeleton className="h-10 w-1/2 rounded-xl" />
+            <Skeleton className="h-10 w-1/2 rounded-xl" />
+          </div>
         </div>
       </div>
     );

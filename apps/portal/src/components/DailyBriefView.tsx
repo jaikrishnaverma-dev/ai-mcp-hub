@@ -13,6 +13,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { Button } from './ui/button.js';
+import { Skeleton } from './ui/skeleton.js';
 import { StatusBadge, PriorityBadge, getStatusCardClass } from './ui/badge.js';
 import { cn } from '@/lib/utils.js';
 
@@ -66,6 +67,87 @@ export function DailyBriefView({
           >
             Sign In to View Brief
           </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading && !brief) {
+    return (
+      <div className="container max-w-4xl mx-auto py-8 px-4 sm:px-6 space-y-8 animate-in fade-in duration-300">
+        {/* Header Skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-zinc-200/80 dark:border-zinc-800">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-48 rounded-lg" />
+            <Skeleton className="h-4 w-72 rounded-md" />
+          </div>
+          <Skeleton className="h-8 w-28 rounded-xl" />
+        </div>
+
+        {/* Metric Strip Skeleton */}
+        <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs overflow-hidden">
+          <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-zinc-100 dark:divide-zinc-800">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="p-3.5 sm:p-4 space-y-2.5">
+                <div className="flex justify-between items-center">
+                  <Skeleton className="h-3.5 w-20 rounded" />
+                  <Skeleton className="h-4 w-4 rounded-full" />
+                </div>
+                <Skeleton className="h-8 w-12 rounded-md" />
+                <Skeleton className="h-3 w-24 rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Focus Targets Skeleton */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-5 w-44 rounded-md" />
+            <Skeleton className="h-4 w-16 rounded" />
+          </div>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between gap-4"
+              >
+                <div className="space-y-2 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-16 rounded-full" />
+                    <Skeleton className="h-4 w-20 rounded-full" />
+                  </div>
+                  <Skeleton className="h-5 w-3/4 rounded-md" />
+                  <Skeleton className="h-3 w-1/3 rounded" />
+                </div>
+                <Skeleton className="h-8 w-20 rounded-xl" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Secondary Grid Skeletons */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="p-5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-4">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-32 rounded" />
+              <Skeleton className="h-4 w-4 rounded" />
+            </div>
+            <div className="space-y-2.5">
+              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </div>
+          </div>
+          <div className="p-5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-4">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-32 rounded" />
+              <Skeleton className="h-4 w-4 rounded" />
+            </div>
+            <div className="space-y-2.5">
+              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </div>
+          </div>
         </div>
       </div>
     );

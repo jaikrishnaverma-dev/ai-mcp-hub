@@ -26,6 +26,7 @@ import {
 } from '../api/client.js';
 import { Button } from './ui/button.js';
 import { Label } from './ui/label.js';
+import { Skeleton } from './ui/skeleton.js';
 
 interface SettingsViewProps {
   currentUser: UserProfile | null;
@@ -173,6 +174,38 @@ export function SettingsView({ currentUser, onRequireAuth }: SettingsViewProps) 
           >
             Sign In with Spent App
           </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading && endpoints.length === 0) {
+    return (
+      <div className="container max-w-4xl mx-auto py-8 px-4 sm:px-6 space-y-6 animate-in fade-in duration-200">
+        <div className="space-y-2 pb-4 border-b border-zinc-200/80 dark:border-zinc-800">
+          <Skeleton className="h-7 w-48 rounded-lg" />
+          <Skeleton className="h-4 w-72 rounded-md" />
+        </div>
+        <div className="p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-9 w-9 rounded-xl" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-4 w-32 rounded" />
+              <Skeleton className="h-3 w-44 rounded" />
+            </div>
+          </div>
+          <Skeleton className="h-8 w-44 rounded-xl" />
+        </div>
+        <div className="p-5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 space-y-4">
+          <div className="flex justify-between items-center">
+            <Skeleton className="h-5 w-40 rounded" />
+            <Skeleton className="h-7 w-28 rounded-xl" />
+          </div>
+          <Skeleton className="h-14 w-full rounded-xl" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Skeleton className="h-14 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-xl" />
+          </div>
         </div>
       </div>
     );

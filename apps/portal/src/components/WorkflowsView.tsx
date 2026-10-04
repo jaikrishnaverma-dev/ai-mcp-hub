@@ -26,6 +26,7 @@ import { Input } from './ui/input.js';
 import { Label } from './ui/label.js';
 import { Textarea } from './ui/textarea.js';
 import { Checkbox } from './ui/checkbox.js';
+import { Skeleton } from './ui/skeleton.js';
 import {
   Dialog,
   DialogContent,
@@ -355,7 +356,40 @@ export function WorkflowsView({ currentUser, onRequireAuth }: WorkflowsViewProps
 
       {/* Workflows List */}
       <div className="space-y-4">
-        {endpoints.length === 0 ? (
+        {loading && endpoints.length === 0 ? (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 sm:p-6 shadow-xs space-y-4"
+              >
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2.5">
+                    <Skeleton className="h-6 w-44 rounded-lg" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-7 w-16 rounded-xl" />
+                    <Skeleton className="h-7 w-7 rounded-xl" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-5/6 rounded" />
+                  <Skeleton className="h-4 w-2/3 rounded" />
+                </div>
+                <div className="pt-2 flex flex-wrap gap-2">
+                  <Skeleton className="h-6 w-28 rounded-lg" />
+                  <Skeleton className="h-6 w-24 rounded-lg" />
+                  <Skeleton className="h-6 w-32 rounded-lg" />
+                </div>
+                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-950 flex items-center justify-between">
+                  <Skeleton className="h-4 w-64 rounded" />
+                  <Skeleton className="h-6 w-20 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : endpoints.length === 0 ? (
           <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 text-center text-xs text-zinc-500">
             No workflows configured. Click &quot;Create Workflow&quot; to provision your first one.
           </div>

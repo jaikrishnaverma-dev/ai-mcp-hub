@@ -34,6 +34,7 @@ import { StatusBadge, PriorityBadge, getStatusCardClass, getStatusTickerClass } 
 import { cn } from '@/lib/utils.js';
 import { Input } from './ui/input.js';
 import { Label } from './ui/label.js';
+import { Skeleton } from './ui/skeleton.js';
 import {
   Dialog,
   DialogContent,
@@ -611,7 +612,40 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
           {/* VIEW MODE 1: HIERARCHY TREE (Goal > Story > Task) */}
           {viewMode === 'tree' && (
             <div className="space-y-4">
-              {filteredGoalTrees.length === 0 &&
+              {loading && tasks.length === 0 ? (
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-xs space-y-4"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-5 w-5 rounded-md" />
+                          <Skeleton className="h-5 w-16 rounded-full" />
+                          <Skeleton className="h-6 w-56 rounded-lg" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-6 w-20 rounded-full" />
+                          <Skeleton className="h-7 w-20 rounded-xl" />
+                        </div>
+                      </div>
+                      <div className="pl-8 space-y-3">
+                        <div className="p-3.5 rounded-xl border border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-950/50 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Skeleton className="h-4 w-14 rounded-full" />
+                            <Skeleton className="h-5 w-40 rounded" />
+                          </div>
+                          <div className="pl-6 space-y-1.5">
+                            <Skeleton className="h-4 w-3/4 rounded" />
+                            <Skeleton className="h-4 w-1/2 rounded" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredGoalTrees.length === 0 &&
               filteredOrphanStories.length === 0 &&
               filteredStandaloneTasks.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 p-8 text-center text-xs text-zinc-500 bg-white dark:bg-zinc-900">
@@ -1255,7 +1289,27 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
           {/* VIEW MODE 2: FLAT LIST (Ticker style with full breadcrumbs on each item) */}
           {viewMode === 'flat' && (
             <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 sm:p-5 shadow-xs space-y-2">
-              {filteredTasks.length === 0 ? (
+              {loading && tasks.length === 0 ? (
+                <div className="space-y-2.5 animate-in fade-in duration-200">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-3 sm:p-3.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 gap-3"
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-5 w-12 rounded-md" />
+                        <Skeleton className="h-5 w-48 sm:w-80 rounded" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                        <Skeleton className="h-7 w-16 rounded-xl" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredTasks.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-8 text-center text-xs text-zinc-500">
                   No items match your filter criteria.
                 </div>
@@ -1355,7 +1409,23 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
       {/* TAB 2: BLOCKERS */}
       {activeTab === 'blockers' && (
         <div className="space-y-3">
-          {blockers.length === 0 ? (
+          {loading && blockers.length === 0 ? (
+            <div className="space-y-3 animate-in fade-in duration-200">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-xs space-y-3"
+                >
+                  <div className="flex justify-between items-center">
+                    <Skeleton className="h-5 w-24 rounded-full" />
+                    <Skeleton className="h-7 w-24 rounded-xl" />
+                  </div>
+                  <Skeleton className="h-4 w-3/4 rounded" />
+                  <Skeleton className="h-3 w-32 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : blockers.length === 0 ? (
             <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 text-center text-xs text-zinc-500">
               No active blockers found in the database.
             </div>
@@ -1395,7 +1465,23 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
       {/* TAB 3: DECISIONS */}
       {activeTab === 'decisions' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {decisions.length === 0 ? (
+          {loading && decisions.length === 0 ? (
+            <>
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-xs space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-28 rounded" />
+                    <Skeleton className="h-3 w-20 rounded" />
+                  </div>
+                  <Skeleton className="h-5 w-3/4 rounded-md" />
+                  <Skeleton className="h-16 w-full rounded-xl" />
+                </div>
+              ))}
+            </>
+          ) : decisions.length === 0 ? (
             <div className="col-span-full rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 text-center text-xs text-zinc-500">
               No architectural decision records (ADRs) logged yet.
             </div>
@@ -1426,7 +1512,19 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
       {/* TAB 4: AUDIT LOG */}
       {activeTab === 'activity' && (
         <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-xs divide-y divide-zinc-100 dark:divide-zinc-800">
-          {activities.length === 0 ? (
+          {loading && activities.length === 0 ? (
+            <div className="p-4 space-y-3 animate-in fade-in duration-200">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <Skeleton className="h-5 w-12 rounded-md" />
+                    <Skeleton className="h-4 w-48 rounded" />
+                  </div>
+                  <Skeleton className="h-3 w-24 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : activities.length === 0 ? (
             <div className="p-8 text-center text-xs text-zinc-500">
               No activity logged yet.
             </div>

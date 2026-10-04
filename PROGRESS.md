@@ -70,6 +70,16 @@
 - Verified full workspace build (`turbo build`) with 0 TypeScript errors.
 - Verified database seed (`pnpm --filter @assistant/server run seed`) creating users, workflows, tasks, recurring events, reminders, and preferences.
 
+**8. UI Skeleton Loading States Across Portal:**
+- Created [`apps/portal/src/components/ui/skeleton.tsx`](file:///Applications/XAMPP/xamppfiles/htdocs/todo-assistance/apps/portal/src/components/ui/skeleton.tsx) matching shadcn/ui and theme design tokens.
+- Implemented smooth animated skeleton loaders in all key portal views:
+  - **Daily Brief View**: Header skeleton, 4-box metrics strip skeleton, top focus item cards skeleton, and side-by-side blocker & due timeline cards skeleton.
+  - **Workflows / Endpoints View**: Scoped workflow card skeletons with header, slug snippet, tool pills, and action button placeholders.
+  - **Data Browser View**: Hierarchy Tree skeletons (goal/story/task nested cards), Flat List row skeletons, Blocker card skeletons, Decision ADR skeletons, and Activity audit log timeline skeletons.
+  - **Catalog View**: Tool & Skill 3-column grid skeletons with category badge, description, and action button placeholders.
+  - **Settings View**: Account card and OAuth 2.0 credentials card skeletons.
+  - **OAuth Consent View**: Full client authorization card skeleton replacing the previous spinner.
+
 ---
 
 ### Session 1 — 2026-10-04
