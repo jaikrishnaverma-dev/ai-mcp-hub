@@ -489,8 +489,34 @@ export const api = {
   getPublicWorkflows: () => fetchJson<{ workflows: Workflow[] }>('/api/workflows/public'),
   likeWorkflow: (id: string) => fetchJson<{ success: boolean; likes: number }>(`/api/workflows/${id}/like`, { method: 'POST' }),
   cloneWorkflow: (id: string) => fetchJson<{ endpoint: Workflow }>(`/api/workflows/${id}/clone`, { method: 'POST' }),
-  sendPlaygroundChat: (payload: { messages: any[]; model?: string; apiKey?: string; tools?: string[] }) =>
-    fetchJson<any>('/api/playground/chat', { method: 'POST', body: JSON.stringify(payload) }),
+  sendPlaygroundChat: async (payload: { messages: any[]; model?: string; apiKey?: string; tools?: string[] }) => {
+    try {
+      return await fetchJson<any>('/api/playground/chat', { method: 'POST', body: JSON.stringify(payload) });
+    } catch (err: any) {
+      // Graceful fallback: If backend returns 404 (e.g. backend deployment pending) and custom apiKey is provided, call OpenRouter directly
+      if (err?.message?.includes('404') && payload.apiKey) {
+        const directRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${payload.apiKey}`,
+            'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://mcphub.apptiva.in',
+            'X-Title': 'MCP Hub Assistant',
+          },
+          body: JSON.stringify({
+            model: payload.model || 'openrouter/free',
+            messages: payload.messages,
+          }),
+        });
+        if (!directRes.ok) {
+          const errText = await directRes.text();
+          throw new Error(`OpenRouter error: ${errText}`);
+        }
+        return await directRes.json();
+      }
+      throw err;
+    }
+  },
   callPlaygroundTool: (payload: { toolName: string; args: any }) =>
     fetchJson<any>('/api/playground/call-tool', { method: 'POST', body: JSON.stringify(payload) }),
   createWorkflow: (data: {
