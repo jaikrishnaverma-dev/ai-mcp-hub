@@ -954,7 +954,8 @@ apiRouter.post("/playground/chat", async (req: Request, res: Response, next: Nex
       return res.status(400).json({ error: "messages array is required" });
     }
 
-    const openRouterKey = apiKey || process.env["OPENROUTER_API_KEY"];
+    const userKey = (typeof apiKey === "string" && apiKey.trim().length > 0) ? apiKey.trim() : undefined;
+    const openRouterKey = userKey || process.env["OPENROUTER_API_KEY"];
     if (!openRouterKey) {
       return res.status(500).json({ error: "OPENROUTER_API_KEY is not configured in server environment (.env)" });
     }
