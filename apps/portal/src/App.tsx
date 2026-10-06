@@ -26,15 +26,17 @@ const PATH_MAP: Record<NavTab, string> = {
   data: '/explorer',
   brief: '/brief',
   settings: '/settings',
+  playground: '/playground',
 };
 
 function getActiveTabFromPath(pathname: string): NavTab {
   if (pathname.startsWith('/brief')) return 'brief';
   if (pathname.startsWith('/workflows') || pathname.startsWith('/endpoints')) return 'workflows';
+  if (pathname.startsWith('/playground')) return 'playground';
   if (pathname.startsWith('/explorer') || pathname.startsWith('/data')) return 'data';
   if (pathname.startsWith('/settings') || pathname.startsWith('/connect')) return 'settings';
   if (pathname.startsWith('/tools') || pathname.startsWith('/marketplace')) return 'marketplace';
-  return 'marketplace';
+  return 'workflows';
 }
 
 export function App() {
@@ -96,7 +98,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f4f4f5] dark:bg-background text-foreground">
+    <div className={`flex flex-col bg-[#f4f4f5] dark:bg-background text-foreground ${hideChrome ? "h-screen h-[100dvh] overflow-hidden" : "min-h-screen"}`}>
       {/* Top Navbar (hidden on standalone OAuth consent screen) */}
       {!hideChrome && (
         <Navbar
@@ -111,7 +113,7 @@ export function App() {
       )}
 
       {/* Main Content Area — React Router Routes */}
-      <main className={`flex-1 ${hideChrome ? 'h-screen flex flex-col p-0 overflow-hidden' : 'pb-24 sm:pb-12'}`}>
+      <main className={`flex-1 min-h-0 ${hideChrome ? 'h-full max-h-full flex flex-col p-0 overflow-hidden' : 'pb-24 sm:pb-12'}`}>
         <Routes>
           <Route path="/" element={<Navigate to="/tools" replace />} />
           <Route

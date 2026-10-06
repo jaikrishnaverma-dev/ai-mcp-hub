@@ -1,3 +1,4 @@
+import { MarkdownRenderer } from "./MarkdownRenderer.js";
 import { useState, useEffect, useRef } from 'react';
 import {
   api,
@@ -14,6 +15,7 @@ import {
   Bot,
   User,
   CheckCircle2,
+  Info,
   Copy,
   Check,
   Sliders,
@@ -66,10 +68,25 @@ export function WorkflowPlayground({
   const [selectedModel, setSelectedModel] = useState<string>('openrouter/free');
   const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('assistant_openrouter_key') || '');
   const [showSettings, setShowSettings] = useState(false);
+  const [expandedToolIds, setExpandedToolIds] = useState<Record<string, boolean>>({});
+  const [copiedToolId, setCopiedToolId] = useState<string | null>(null);
+
+  const toggleToolResponse = (id: string) => {
+    setExpandedToolIds((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  const handleCopyToolResult = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedToolId(id);
+    setTimeout(() => setCopiedToolId(null), 2000);
+  };
   const [showContext, setShowContext] = useState(false);
   const [copiedSlug, setCopiedSlug] = useState(false);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Initialize conversation with workflow system prompt
@@ -86,9 +103,14 @@ export function WorkflowPlayground({
     ]);
   }, [workflow]);
 
-  // Auto-scroll
+  // Auto-scroll chat container only (prevents full-page window scrolling)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTo({
+        top: chatScrollRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
   }, [messages, loading]);
 
   const handleSaveApiKey = (key: string) => {
@@ -121,9 +143,14 @@ export function WorkflowPlayground({
 
   // Parse Spent App style action pills: <!--actions:[{"label":"...","query":"..."}]-->
   const extractActionPills = (text: string) => {
+    let clean = text || "";
+    clean = clean.replace(/<dots_function_call>[\s\S]*?<\/dots_function_call>/gi, "");
+    clean = clean.replace(/<function_call>[\s\S]*?<\/function_call>/gi, "");
+    clean = clean.replace(/<invoke[\s\S]*?<\/invoke>/gi, "");
+
     const regex = /<!--actions:(.*?)-->/;
-    const match = text.match(regex);
-    if (!match) return { cleanText: text, actions: [] };
+    const match = clean.match(regex);
+    if (!match) return { cleanText: clean.trim(), actions: [] };
 
     try {
       const actions = match[1] ? JSON.parse(match[1]) : [];
@@ -281,6 +308,7 @@ export function WorkflowPlayground({
           messages: followUpPayload,
           model: selectedModel,
           apiKey: apiKey || undefined,
+          tools: workflow.toolAllowlist,
         });
 
         const finalChoice = followUpResponse.choices?.[0];
@@ -459,7 +487,7 @@ export function WorkflowPlayground({
         )}
 
         {/* Chat Message Scrollable Container */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4 overscroll-contain">
           {messages.filter((m) => m.role !== 'system' && m.role !== 'tool').length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4 my-auto">
               <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-500 text-white flex items-center justify-center shadow-lg shadow-purple-500/20">
@@ -511,44 +539,119 @@ export function WorkflowPlayground({
                   </div>
 
                   <div className={`space-y-2 max-w-[85%] sm:max-w-[75%] min-w-0 ${isUser ? 'items-end' : 'items-start'}`}>
-                    {/* Message bubble */}
-                    <div
-                      className={`p-3.5 sm:p-4 rounded-2xl text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words ${
-                        isUser
-                          ? 'bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-tr-xs font-medium'
-                          : 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-900 dark:text-zinc-100 rounded-tl-xs border border-zinc-200/50 dark:border-zinc-700/50'
-                      }`}
-                    >
-                      {cleanText}
-                    </div>
+                  {/* Message bubble */}
+                  {cleanText ? (
+                    isUser ? (
+                      <div className="p-3.5 sm:p-4 rounded-2xl text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded-tr-xs font-medium">
+                        {cleanText}
+                      </div>
+                    ) : (
+                      <div className="p-3.5 sm:p-4 rounded-2xl text-xs sm:text-sm leading-relaxed rounded-tl-xs border border-zinc-200/50 dark:border-zinc-700/50 bg-zinc-100 dark:bg-zinc-800/80 text-zinc-900 dark:text-zinc-100 shadow-2xs overflow-hidden">
+                        <MarkdownRenderer content={cleanText} />
+                      </div>
+                    )
+                  ) : null}
 
-                    {/* Tool executions preview (Spent App style) */}
-                    {msg.executedTools && msg.executedTools.length > 0 && (
-                      <div className="space-y-1.5 w-full">
-                        {msg.executedTools.map((et, idx) => (
+                  {/* Tool executions preview (Spent App style) */}
+                  {msg.executedTools && msg.executedTools.length > 0 && (
+                    <div className="space-y-2 w-full">
+                      {msg.executedTools.map((et, idx) => {
+                        const toolKey = `${msg.id}-${idx}`;
+                        const isExpanded = !!expandedToolIds[toolKey];
+                        const resultString =
+                          typeof et.result === 'string'
+                            ? et.result
+                            : JSON.stringify(et.result, null, 2);
+
+                        return (
                           <div
                             key={idx}
-                            className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs space-y-1.5 shadow-2xs"
+                            className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs shadow-2xs transition-all"
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5">
-                                <Wrench className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-                                <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Wrench className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                                <span className="font-mono font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                                   {et.name}
                                 </span>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleToolResponse(toolKey)}
+                                  className={`inline-flex items-center justify-center h-5 w-5 rounded-md transition-colors cursor-pointer shrink-0 ${
+                                    isExpanded
+                                      ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 ring-1 ring-purple-300 dark:ring-purple-700'
+                                      : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                                  }`}
+                                  title={isExpanded ? 'Hide response details' : 'Show response raw data'}
+                                  aria-label={`Toggle info for ${et.name}`}
+                                >
+                                  <Info className="h-3.5 w-3.5" />
+                                </button>
                               </div>
-                              <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                                <CheckCircle2 className="h-3 w-3" />
-                                <span>Executed</span>
-                              </span>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {et.status === 'success' ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200/60 dark:border-emerald-800/60">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    <span>Executed</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200/60 dark:border-rose-800/60">
+                                    <X className="h-3 w-3" />
+                                    <span>Failed</span>
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <pre className="text-[10px] font-mono text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950 p-2 rounded-lg overflow-x-auto max-h-32">
-                              {JSON.stringify(et.result, null, 2)}
-                            </pre>
+
+                            {/* Raw data response only shown when clicked on i info button */}
+                            {isExpanded && (
+                              <div className="pt-2 mt-2 border-t border-zinc-100 dark:border-zinc-800/80 space-y-2 animate-in fade-in duration-150">
+                                {et.args && Object.keys(et.args).length > 0 && (
+                                  <div className="space-y-1">
+                                    <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-semibold">
+                                      Parameters
+                                    </span>
+                                    <pre className="text-[10px] font-mono text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950 p-2 rounded-lg overflow-x-auto border border-zinc-100 dark:border-zinc-800/60">
+                                      {JSON.stringify(et.args, null, 2)}
+                                    </pre>
+                                  </div>
+                                )}
+
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-semibold">
+                                      Raw Response Data
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyToolResult(toolKey, resultString)}
+                                      className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 cursor-pointer transition-colors"
+                                    >
+                                      {copiedToolId === toolKey ? (
+                                        <>
+                                          <Check className="h-3 w-3 text-emerald-500" />
+                                          <span className="text-emerald-500">Copied</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy className="h-3 w-3" />
+                                          <span>Copy</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                  <pre className="text-[10px] font-mono text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-950 p-2.5 rounded-xl overflow-x-auto max-h-40 border border-zinc-200/60 dark:border-zinc-800/60 leading-relaxed shadow-inner">
+                                    {resultString}
+                                  </pre>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        );
+                      })}
+                    </div>
+                  )}
 
                     {/* Interactive Action Pills (Spent App style) */}
                     {actions.length > 0 && (
@@ -576,7 +679,7 @@ export function WorkflowPlayground({
             </div>
           )}
 
-          <div ref={messagesEndRef} />
+          {/* End of messages marker */}
         </div>
 
         {/* Message Input Bottom Bar */}

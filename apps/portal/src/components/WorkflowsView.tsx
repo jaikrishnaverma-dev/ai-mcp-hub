@@ -13,6 +13,7 @@ import {
 } from '../api/client.js';
 import {
   Plus,
+  Wrench,
   Copy,
   Check,
   Trash2,
@@ -384,6 +385,15 @@ export function WorkflowsView({ currentUser, onRequireAuth }: WorkflowsViewProps
 
           <div className="flex items-center gap-2 shrink-0">
             <button
+              onClick={() => navigate("/tools")}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 px-3.5 py-2 text-xs font-semibold shadow-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              title="Browse all available tools in catalog"
+            >
+              <Wrench className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              <span>See Available Tools</span>
+            </button>
+
+            <button
               onClick={handleOpenCreate}
               className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950 px-4 py-2 text-xs font-semibold shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
             >
@@ -441,15 +451,24 @@ export function WorkflowsView({ currentUser, onRequireAuth }: WorkflowsViewProps
             <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto">
               Create your first scoped workflow with targeted tools and system instructions.
             </p>
-            {activeTab === 'my' && (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
               <button
-                onClick={handleOpenCreate}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950 px-4 py-2 text-xs font-semibold"
+                onClick={() => navigate("/tools")}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 px-3.5 py-2 text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
               >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Create Workflow</span>
+                <Wrench className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                <span>See Available Tools</span>
               </button>
-            )}
+              {activeTab === "my" && (
+                <button
+                  onClick={handleOpenCreate}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950 px-4 py-2 text-xs font-semibold"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Create Workflow</span>
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           displayedWorkflows.map((wf) => {

@@ -800,7 +800,7 @@ apiRouter.post(["/endpoints/:id/clone", "/workflows/:id/clone"], async (req: Req
 // AI Chat Playground — execute tool locally
 apiRouter.post("/playground/call-tool", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const ctx = getCtx(req);
+    const ctx = (req as any).ctx || { userId: "playground-user", actorType: "user" };
     const { toolName, args } = req.body;
     if (!toolName) {
       return res.status(400).json({ error: "toolName is required" });
@@ -813,6 +813,116 @@ apiRouter.post("/playground/call-tool", async (req: Request, res: Response, next
     }
 
     if (toolName.startsWith("spent_") || toolName.includes("expense") || toolName.includes("wallet")) {
+      if (toolName === "spent_add_expense") {
+        const amt = Number(args?.amount) || 0;
+        const title = String(args?.title || "Expense");
+        const cat = String(args?.category || "General");
+        return res.json({
+          success: true,
+          result: {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                status: "success",
+                transaction_id: `tx_${Date.now().toString(36)}`,
+                message: `Expense of ₹${amt} for "${title}" recorded in Spent App.`,
+                amount: amt,
+                title,
+                category: cat,
+                currency: "INR",
+                recorded_at: new Date().toISOString()
+              }, null, 2)
+            }]
+          }
+        });
+      }
+
+      if (toolName === "spent_list_expenses") {
+        return res.json({
+          success: true,
+          result: {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                status: "success",
+                count: 3,
+                expenses: [
+                  { id: "exp_101", title: "Groceries (DMart)", amount: 1450, category: "rashan_ghar", date: "2026-10-05" },
+                  { id: "exp_102", title: "Electricity & Utility Bill", amount: 2800, category: "kiraya_bijli_pani", date: "2026-10-04" },
+                  { id: "exp_103", title: "Team Lunch", amount: 950, category: "khana_nashta", date: "2026-10-02" }
+                ]
+              }, null, 2)
+            }]
+          }
+        });
+      }
+
+      if (toolName === "spent_get_summary") {
+        return res.json({
+          success: true,
+          result: {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                status: "success",
+                period: "Current Month",
+                total_spend: 18450,
+                monthly_budget: 35000,
+                remaining_budget: 16550,
+                burn_rate: "₹595 / day (Healthy)",
+                breakdown: {
+                  rashan_ghar: 6800,
+                  kiraya_bijli_pani: 4200,
+                  khana_nashta: 3450,
+                  transport: 2100,
+                  miscellaneous: 1900
+                }
+              }, null, 2)
+            }]
+          }
+        });
+      }
+
+      if (toolName === "spent_manage_wallet") {
+        return res.json({
+          success: true,
+          result: {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                status: "success",
+                wallet_balance: 4250,
+                action_executed: args?.action || "check_balance",
+                currency: "INR (₹)",
+                status_msg: "Spent Wallet active and verified"
+              }, null, 2)
+            }]
+          }
+        });
+      }
+
+      if (toolName === "spent_split_bill") {
+        const total = Number(args?.amount) || 1200;
+        const members = Array.isArray(args?.members) ? args.members : ["You", "Rahul", "Priya"];
+        return res.json({
+          success: true,
+          result: {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                status: "success",
+                title: args?.title || "Split Bill",
+                total_amount: total,
+                split_count: members.length,
+                per_person: Math.round(total / members.length),
+                participants: members,
+                status_msg: "Bill split computed and added to ledger"
+              }, null, 2)
+            }]
+          }
+        });
+      }
+
       return res.json({
         success: true,
         result: {
@@ -864,12 +974,75 @@ apiRouter.post("/playground/chat", async (req: Request, res: Response, next: Nex
             }
           });
         } else if (tName.startsWith("spent_")) {
+          const spentSchemas: Record<string, any> = {
+            spent_add_expense: {
+              description: "Add household or personal expense to Spent App with amount, title, and auto category.",
+              parameters: {
+                type: "object",
+                properties: {
+                  amount: { type: "number", description: "Amount spent in INR (₹)" },
+                  title: { type: "string", description: "Expense description or item name" },
+                  category: { type: "string", description: "Category (e.g. rashan_ghar, khana_nashta, kiraya_bijli_pani, travel)" },
+                  home_id: { type: "number", description: "Target Home/Wallet ID" }
+                },
+                required: ["amount", "title"]
+              }
+            },
+            spent_list_expenses: {
+              description: "Fetch recent expenses from Spent App filtered by date range or category.",
+              parameters: {
+                type: "object",
+                properties: {
+                  limit: { type: "number", description: "Max items to return (default: 20)" },
+                  category: { type: "string", description: "Filter by category" }
+                }
+              }
+            },
+            spent_get_summary: {
+              description: "Get monthly expenditure breakdown, budget health, and spend velocity from Spent App.",
+              parameters: {
+                type: "object",
+                properties: {
+                  month: { type: "string", description: "Optional month filter (e.g. 2026-10)" }
+                }
+              }
+            },
+            spent_manage_wallet: {
+              description: "Query prepaid balance, check deficits, or manage recharge settlements in Spent App.",
+              parameters: {
+                type: "object",
+                properties: {
+                  action: { type: "string", enum: ["check_balance", "add_funds", "record_settlement"] },
+                  amount: { type: "number" }
+                },
+                required: ["action"]
+              }
+            },
+            spent_split_bill: {
+              description: "Split shared dinner, rent, or travel bills with collaborators and compute balances.",
+              parameters: {
+                type: "object",
+                properties: {
+                  title: { type: "string", description: "Bill name" },
+                  amount: { type: "number", description: "Total amount to split in INR" },
+                  members: { type: "array", items: { type: "string" }, description: "Member names to split between" }
+                },
+                required: ["title", "amount"]
+              }
+            }
+          };
+
+          const custom = spentSchemas[tName] || {
+            description: `Spent App personal finance tool: ${tName}`,
+            parameters: { type: "object", properties: { amount: { type: "number" }, title: { type: "string" }, category: { type: "string" } } }
+          };
+
           openAiTools.push({
             type: "function",
             function: {
               name: tName,
-              description: `Spent App personal finance tool: ${tName}`,
-              parameters: { type: "object", properties: { amount: { type: "number" }, title: { type: "string" }, category: { type: "string" } } }
+              description: custom.description,
+              parameters: custom.parameters
             }
           });
         }

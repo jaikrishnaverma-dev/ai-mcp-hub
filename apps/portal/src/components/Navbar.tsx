@@ -18,9 +18,10 @@ import {
   LayoutDashboard,
   Settings,
   Workflow,
+  Wrench,
 } from 'lucide-react';
 
-export type NavTab = 'brief' | 'workflows' | 'endpoints' | 'marketplace' | 'data' | 'settings';
+export type NavTab = 'brief' | 'workflows' | 'endpoints' | 'marketplace' | 'data' | 'settings' | 'playground';
 
 interface NavbarProps {
   activeTab: NavTab;
@@ -44,9 +45,10 @@ export function Navbar({
   const tabs = [
     { id: 'brief' as const, label: 'Daily Brief', icon: LayoutDashboard },
     { id: 'workflows' as const, label: 'Workflows', icon: Workflow },
-    { id: 'marketplace' as const, label: 'Tools & Skills', icon: Sparkles },
-    { id: 'data' as const, label: 'Users\' Data Explorer', icon: Database },
-    { id: 'settings' as const, label: 'Settings & Connect AI', icon: Settings },
+    { id: 'playground' as const, label: 'Chat with AI', icon: Sparkles },
+    { id: 'marketplace' as const, label: 'Tools', icon: Wrench },
+    { id: 'data' as const, label: 'Explorer', icon: Database },
+    { id: 'settings' as const, label: 'Settings', icon: Settings },
   ];
 
   return (
