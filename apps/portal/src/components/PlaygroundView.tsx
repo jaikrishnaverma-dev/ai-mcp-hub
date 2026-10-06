@@ -440,6 +440,12 @@ export function PlaygroundView({ currentUser, onRequireAuth: _onRequireAuth }: P
     const query = (textToSend || input).trim();
     if (!query || loading) return;
 
+    const effectiveKey = (apiKey || keyInput || localStorage.getItem('assistant_openrouter_key') || '').trim();
+    if (effectiveKey && !apiKey) {
+      setApiKey(effectiveKey);
+      localStorage.setItem('assistant_openrouter_key', effectiveKey);
+    }
+
     setInput('');
     const userMsgId = 'usr-' + Date.now();
     const newMessages: Message[] = [
@@ -453,7 +459,7 @@ export function PlaygroundView({ currentUser, onRequireAuth: _onRequireAuth }: P
       const response = await api.sendPlaygroundChat({
         messages: toApiPayload(newMessages, 16),
         model: selectedModel,
-        apiKey: apiKey || undefined,
+        apiKey: effectiveKey || undefined,
         tools: enabledToolNames,
       });
 
@@ -540,7 +546,7 @@ export function PlaygroundView({ currentUser, onRequireAuth: _onRequireAuth }: P
         const followUpResponse = await api.sendPlaygroundChat({
           messages: toApiPayload(updatedChat, 16),
           model: selectedModel,
-          apiKey: apiKey || undefined,
+          apiKey: effectiveKey || undefined,
           tools: enabledToolNames,
         });
 
@@ -570,7 +576,9 @@ export function PlaygroundView({ currentUser, onRequireAuth: _onRequireAuth }: P
       const rawError = err instanceof Error ? err.message : String(err);
       let formattedMsg = rawError;
 
-      if (rawError.includes('429') || rawError.toLowerCase().includes('rate limit')) {
+      if (rawError.includes('404')) {
+        formattedMsg = '⚠️ The server endpoint (/api/playground/chat) is not active on this host yet. Click Model Settings (⚙️) above, paste your Custom OpenRouter API Key and click Done to chat directly!';
+      } else if (rawError.includes('429') || rawError.toLowerCase().includes('rate limit')) {
         formattedMsg = '⚠️ OpenRouter Free Tier Daily Rate Limit Exceeded (50 requests/day limit reached). You can enter your custom OpenRouter API Key in Settings and click Done to continue immediately.';
       } else if (rawError.includes('OpenRouter error:')) {
         try {

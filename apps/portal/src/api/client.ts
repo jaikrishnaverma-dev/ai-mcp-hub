@@ -490,11 +490,13 @@ export const api = {
   likeWorkflow: (id: string) => fetchJson<{ success: boolean; likes: number }>(`/api/workflows/${id}/like`, { method: 'POST' }),
   cloneWorkflow: (id: string) => fetchJson<{ endpoint: Workflow }>(`/api/workflows/${id}/clone`, { method: 'POST' }),
   sendPlaygroundChat: async (payload: { messages: any[]; model?: string; apiKey?: string; tools?: string[] }) => {
+    const effectiveKey = (payload.apiKey || (typeof window !== 'undefined' ? localStorage.getItem('assistant_openrouter_key') : '') || '').trim();
     try {
-      return await fetchJson<any>('/api/playground/chat', { method: 'POST', body: JSON.stringify(payload) });
+      return await fetchJson<any>('/api/playground/chat', { method: 'POST', body: JSON.stringify({ ...payload, apiKey: effectiveKey || undefined }) });
     } catch (err: any) {
-      // Graceful fallback: If backend returns 404 (e.g. backend deployment pending) and custom apiKey is provided, call OpenRouter directly
-      if (err?.message?.includes('404') && payload.apiKey) {
+      // Graceful fallback: If backend returns 404 (e.g. backend deployment pending) and any custom key is available, call OpenRouter directly
+      if (err?.message?.includes('404') && effectiveKey) {
+        payload.apiKey = effectiveKey;
         const directRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
