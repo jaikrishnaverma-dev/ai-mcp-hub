@@ -66,6 +66,9 @@ const externalMcpSchema = new Schema<ExternalMcpDocument>(
   },
 );
 
+// Prevent duplicate external MCP registrations for the same user and URL
+externalMcpSchema.index({ userId: 1, url: 1 }, { unique: true });
+
 export const ExternalMcp = mongoose.model<ExternalMcpDocument>(
   'ExternalMcp',
   externalMcpSchema,

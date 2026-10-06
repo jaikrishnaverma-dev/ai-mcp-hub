@@ -19,6 +19,10 @@ export interface WorkflowDocument extends Document {
   instructions?: string;
   scopes: EndpointScope[];
   status: EndpointStatus;
+  isPublic?: boolean;
+  likesCount?: number;
+  commentsCount?: number;
+  authorName?: string;
   expiresAt?: Date;
   createdAt: Date;
 }
@@ -50,8 +54,8 @@ const workflowSchema = new Schema<WorkflowDocument>(
       type: [String],
       required: true,
       validate: {
-        validator: (v: string[]) => v.length >= 1 && v.length <= 20,
-        message: 'Workflows must have 1-20 tools',
+        validator: (v: string[]) => v.length >= 1,
+        message: 'Workflows must have at least 1 tool',
       },
     },
     instructions: {
@@ -68,6 +72,23 @@ const workflowSchema = new Schema<WorkflowDocument>(
       enum: ENDPOINT_STATUSES,
       default: 'active',
       index: true,
+    },
+    isPublic: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    likesCount: {
+      type: Number,
+      default: 0,
+    },
+    commentsCount: {
+      type: Number,
+      default: 0,
+    },
+    authorName: {
+      type: String,
+      trim: true,
     },
     expiresAt: {
       type: Date,
@@ -88,6 +109,7 @@ const workflowSchema = new Schema<WorkflowDocument>(
 
 // Indexes
 workflowSchema.index({ ownerId: 1, status: 1 });
+workflowSchema.index({ isPublic: 1, createdAt: -1 });
 
 export const Workflow: Model<WorkflowDocument> =
   mongoose.models['Endpoint'] ||

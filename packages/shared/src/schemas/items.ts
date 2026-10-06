@@ -10,6 +10,8 @@ import {
   ITEM_STATUSES,
   ITEM_PRIORITIES,
   DEFAULT_TIMEZONE,
+  CONFIDENCE_LEVELS,
+  DUE_DATE_SOURCES,
 } from '../constants/index.js';
 
 // --- Shared field schemas ---
@@ -26,6 +28,9 @@ export const createTaskInput = z.object({
   priority: z.enum(ITEM_PRIORITIES).default('medium'),
   dueAt: z.string().datetime({ offset: true }).optional(),
   estimateMin: z.number().int().positive().optional(),
+  confidence: z.enum(CONFIDENCE_LEVELS).optional().describe('Provenance: explicit (user stated), derived (agent inferred), unknown'),
+  dueDateSource: z.enum(DUE_DATE_SOURCES).optional().describe('Provenance source for due date: user_set, inferred, calendar_sync, system'),
+  meta: z.record(z.unknown()).optional(),
   reason: z.string().max(1000).optional(),
   requestId: z.string().max(100).optional(),
 });
@@ -64,11 +69,19 @@ export const updateTaskInput = z.object({
   taskId: objectIdString,
   title: z.string().min(1).max(500).optional(),
   description: z.string().max(5000).optional(),
-  status: z.enum(ITEM_STATUSES).optional(),
+  status: z.enum(ITEM_STATUSES).optional().describe('Update status: todo, in_progress, blocked, done, cancelled. Changing to done triggers dependency unblocking; changing to blocked records a blocker.'),
   priority: z.enum(ITEM_PRIORITIES).optional(),
   dueAt: z.string().datetime({ offset: true }).nullable().optional(),
   estimateMin: z.number().int().positive().nullable().optional(),
-  reason: z.string().max(1000).optional(),
+  confidence: z.enum(CONFIDENCE_LEVELS).optional().describe('Provenance: explicit, derived, unknown'),
+  dueDateSource: z.enum(DUE_DATE_SOURCES).optional().describe('Provenance source for due date'),
+  meta: z.record(z.unknown()).optional(),
+  blockerReason: z.string().max(1000).optional().describe('Why the item is blocked (used when status is set to blocked)'),
+  waitingOnName: z.string().max(200).optional().describe('Name of external person/vendor we are waiting on when blocked'),
+  waitingOnUserId: objectIdString.optional().describe('Internal user ID we are waiting on when blocked'),
+  followUpAt: z.string().datetime({ offset: true }).optional().describe('Follow-up reminder date for the blocker (ISO 8601)'),
+  deadline: z.string().datetime({ offset: true }).optional().describe('Hard deadline for blocker response (ISO 8601)'),
+  reason: z.string().max(1000).optional().describe('Explanation for this update'),
   requestId: z.string().max(100).optional(),
 });
 export type UpdateTaskInput = z.infer<typeof updateTaskInput>;
@@ -131,6 +144,7 @@ export const itemFull = itemSummary.extend({
   startAt: z.string().nullable(),
   endAt: z.string().nullable(),
   tz: z.string(),
+  meta: z.record(z.unknown()).nullable().optional(),
   updatedAt: z.string(),
   deletedAt: z.string().nullable(),
 });

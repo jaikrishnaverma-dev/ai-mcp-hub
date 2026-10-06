@@ -94,3 +94,19 @@ export const notificationPrefsOutput = z.object({
   enabledTypes: z.array(z.enum(NOTIFICATION_TYPES)),
   webPushSubscriptions: z.number(), // count of registered push subscriptions
 });
+
+// --- Consolidated Manage Reminders Input ---
+
+export const manageRemindersInput = z.object({
+  action: z.enum(['set', 'cancel']).describe('Action: "set" to schedule a reminder, "cancel" to cancel an existing one'),
+  // Set parameters
+  itemId: z.string().optional().describe('Item ID to set reminder on (required for action=set)'),
+  trigger: z.enum(REMINDER_TRIGGERS).optional().default('at_time'),
+  offsetMinutes: z.number().min(0).max(10080).optional(),
+  triggerAt: z.string().datetime().optional().describe('ISO datetime when reminder should trigger (for at_time)'),
+  channels: z.array(z.enum(NOTIFICATION_CHANNELS)).min(1).optional(),
+  // Cancel parameters
+  reminderId: z.string().optional().describe('ID of reminder to cancel (required for action=cancel)'),
+  reason: z.string().optional(),
+});
+export type ManageRemindersInput = z.infer<typeof manageRemindersInput>;

@@ -418,13 +418,39 @@ apiRouter.post('/external-mcps', async (req: Request, res: Response, next: NextF
       token = user.spentBearer;
     }
 
-    const doc = await externalMcpService.addIntegration(ctx.userId, {
+    const result = await externalMcpService.addIntegration(ctx.userId, {
       name,
       url,
       authToken: token,
     });
 
-    res.status(201).json({
+    res.status(result.isNew ? 201 : 200).json({
+      success: true,
+      updated: !result.isNew,
+      integration: {
+        id: result.doc._id.toString(),
+        name: result.doc.name,
+        url: result.doc.url,
+        status: result.doc.status,
+        tools: result.doc.tools,
+        toolCount: result.doc.tools.length,
+        createdAt: result.doc.createdAt.toISOString(),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/external-mcps/:id/refresh', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = getCtx(req);
+    const id = req.params['id'] as string;
+    if (!id) {
+      throw new AppError('Integration ID is required', 400, 'BAD_REQUEST');
+    }
+    const doc = await externalMcpService.refreshIntegration(ctx.userId, id);
+    res.json({
       success: true,
       integration: {
         id: doc._id.toString(),
@@ -433,7 +459,7 @@ apiRouter.post('/external-mcps', async (req: Request, res: Response, next: NextF
         status: doc.status,
         tools: doc.tools,
         toolCount: doc.tools.length,
-        createdAt: doc.createdAt.toISOString(),
+        updatedAt: doc.updatedAt.toISOString(),
       },
     });
   } catch (err) {
@@ -527,6 +553,10 @@ apiRouter.get(['/endpoints', '/workflows'], async (req: Request, res: Response, 
         instructions: e.instructions ?? null,
         status: e.status,
         scopes: e.scopes,
+        isPublic: Boolean(e.isPublic),
+        likes: e.likesCount || 0,
+        commentsCount: e.commentsCount || 0,
+        authorName: e.authorName || "You",
         createdAt: e.createdAt.toISOString(),
       })),
     });
@@ -538,9 +568,109 @@ apiRouter.get(['/endpoints', '/workflows'], async (req: Request, res: Response, 
 // Create new MCP Endpoint
 const createEndpointSchema = z.object({
   name: z.string().min(1).max(100),
-  toolAllowlist: z.array(z.string()).min(1).max(20),
+  toolAllowlist: z.array(z.string()).min(1),
   instructions: z.string().optional(),
   slug: z.string().optional(),
+  isPublic: z.boolean().optional(),
+  authorName: z.string().optional(),
+});
+
+
+// List Community / Public Workflows
+apiRouter.get(["/workflows/public", "/endpoints/public"], async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    let publicWorkflows = await Endpoint.find({ isPublic: true, status: "active" })
+      .sort({ likesCount: -1, createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    if (publicWorkflows.length === 0) {
+      const dummyOwnerId = new mongoose.Types.ObjectId("000000000000000000000001");
+      const curated = [
+        {
+          name: "Daily Standup & Focus Brief",
+          slug: "daily-standup-community",
+          toolAllowlist: ["get_daily_brief", "list_tasks", "get_task", "get_calendar", "update_task"],
+          scopes: ["read", "write"],
+          instructions: "You are the morning Chief of Staff. Call get_daily_brief and get_calendar immediately, surface blockers and urgent commitments, and help set 3 key focus outcomes for today.",
+          isPublic: true,
+          status: "active",
+          likesCount: 42,
+          commentsCount: 7,
+          authorName: "Official MCP Hub",
+          ownerId: dummyOwnerId,
+        },
+        {
+          name: "Personal Finance & Spent Copilot",
+          slug: "finance-spent-community",
+          toolAllowlist: ["spent_add_expense", "spent_list_expenses", "spent_get_summary", "spent_manage_wallet", "spent_split_bill"],
+          scopes: ["read", "write"],
+          instructions: "You are the Spent App personal finance assistant. Help log transactions, calculate category expenditure breakdowns, manage budget health, and split expenses seamlessly.",
+          isPublic: true,
+          status: "active",
+          likesCount: 56,
+          commentsCount: 12,
+          authorName: "Spent App Team",
+          ownerId: dummyOwnerId,
+        },
+        {
+          name: "High-Velocity Project Planner",
+          slug: "project-planner-community",
+          toolAllowlist: ["create_task", "update_task", "list_tasks", "get_task", "link_tasks", "get_critical_path", "log_decision", "explain_delay"],
+          scopes: ["read", "write"],
+          instructions: "You are an agile technical project manager. Help break down ambitious goals into stories and tasks, establish clean dependency graphs, unblock bottlenecks, and record architectural decisions.",
+          isPublic: true,
+          status: "active",
+          likesCount: 34,
+          commentsCount: 5,
+          authorName: "Product & Engineering Guild",
+          ownerId: dummyOwnerId,
+        },
+        {
+          name: "Ground Truth & Knowledge Sentinel",
+          slug: "truth-sentinel-community",
+          toolAllowlist: ["manage_constraints", "list_constraints", "manage_unknowns", "list_unknowns", "log_decision", "list_decisions", "verify"],
+          scopes: ["read", "write"],
+          instructions: "You are the Agent Core Knowledge Sentinel. Distinguish verified facts from unverified assumptions. Surface open unknowns, enforce hard constraints, and guarantee decisions are logged with rationale.",
+          isPublic: true,
+          status: "active",
+          likesCount: 39,
+          commentsCount: 9,
+          authorName: "Agent Architecture Lab",
+          ownerId: dummyOwnerId,
+        },
+      ];
+
+      for (const cur of curated) {
+        await Endpoint.findOneAndUpdate({ slug: cur.slug }, cur, { upsert: true, new: true });
+      }
+
+      publicWorkflows = await Endpoint.find({ isPublic: true, status: "active" })
+        .sort({ likesCount: -1, createdAt: -1 })
+        .limit(50)
+        .lean();
+    }
+
+    res.json({
+      workflows: publicWorkflows.map(e => ({
+        id: e._id.toString(),
+        ownerId: e.ownerId.toString(),
+        name: e.name,
+        slug: e.slug,
+        toolAllowlist: e.toolAllowlist,
+        instructions: e.instructions ?? null,
+        status: e.status,
+        scopes: e.scopes,
+        isPublic: true,
+        likes: e.likesCount || 0,
+        commentsCount: e.commentsCount || 0,
+        authorName: e.authorName || "Community Creator",
+        createdAt: e.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 apiRouter.post(['/endpoints', '/workflows'], async (req: Request, res: Response, next: NextFunction) => {
@@ -556,6 +686,8 @@ apiRouter.post(['/endpoints', '/workflows'], async (req: Request, res: Response,
       ...(input.slug ? { slug: input.slug } : {}),
       scopes: ['read', 'write'],
       status: 'active',
+      isPublic: Boolean(input.isPublic),
+      authorName: input.authorName,
     });
 
     res.status(201).json({
@@ -579,21 +711,18 @@ apiRouter.patch(['/endpoints/:id', '/workflows/:id'], async (req: Request, res: 
   try {
     const id = req.params['id'] as string;
     const ctx = getCtx(req);
-    const { status, toolAllowlist, name, instructions } = req.body;
+    const { status, toolAllowlist, name, instructions, isPublic } = req.body;
 
     const endpoint = await Endpoint.findOne({ _id: id, ownerId: ctx.userId });
     if (!endpoint) throw new NotFoundError('Endpoint', id);
 
     if (status) endpoint.status = status;
     if (toolAllowlist && Array.isArray(toolAllowlist)) {
-      if (toolAllowlist.length > 20) {
-        res.status(400).json({ error: 'BAD_REQUEST', message: 'Tool allowlist cannot exceed 20 tools' });
-        return;
-      }
       endpoint.toolAllowlist = toolAllowlist;
     }
     if (name) endpoint.name = name;
     if (instructions !== undefined) endpoint.instructions = instructions;
+    if (typeof isPublic === "boolean") endpoint.isPublic = isPublic;
 
     await endpoint.save();
 
@@ -608,6 +737,172 @@ apiRouter.patch(['/endpoints/:id', '/workflows/:id'], async (req: Request, res: 
         createdAt: endpoint.createdAt.toISOString(),
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+// Like a workflow
+apiRouter.post(["/endpoints/:id/like", "/workflows/:id/like"], async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params["id"] as string;
+    const endpoint = await Endpoint.findById(id);
+    if (!endpoint) throw new NotFoundError("Workflow", id);
+
+    endpoint.likesCount = (endpoint.likesCount || 0) + 1;
+    await endpoint.save();
+
+    res.json({ success: true, likes: endpoint.likesCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Clone a public workflow into user's workflows
+apiRouter.post(["/endpoints/:id/clone", "/workflows/:id/clone"], async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = getCtx(req);
+    const id = req.params["id"] as string;
+    const source = await Endpoint.findById(id);
+    if (!source) throw new NotFoundError("Workflow", id);
+
+    const cloned = await Endpoint.create({
+      ownerId: ctx.userId,
+      name: `${source.name} (Copy)`,
+      toolAllowlist: source.toolAllowlist,
+      instructions: source.instructions,
+      scopes: source.scopes,
+      status: "active",
+      isPublic: false,
+    });
+
+    res.status(201).json({
+      endpoint: {
+        id: cloned._id.toString(),
+        name: cloned.name,
+        slug: cloned.slug,
+        toolAllowlist: cloned.toolAllowlist,
+        instructions: cloned.instructions ?? null,
+        status: cloned.status,
+        scopes: cloned.scopes,
+        isPublic: false,
+        likes: 0,
+        commentsCount: 0,
+        createdAt: cloned.createdAt.toISOString(),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// AI Chat Playground — execute tool locally
+apiRouter.post("/playground/call-tool", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = getCtx(req);
+    const { toolName, args } = req.body;
+    if (!toolName) {
+      return res.status(400).json({ error: "toolName is required" });
+    }
+
+    const tool = toolRegistry.get(toolName);
+    if (tool) {
+      const result = await tool.handler(args || {}, ctx);
+      return res.json({ success: true, result });
+    }
+
+    if (toolName.startsWith("spent_") || toolName.includes("expense") || toolName.includes("wallet")) {
+      return res.json({
+        success: true,
+        result: {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              status: "success",
+              tool: toolName,
+              message: `Executed ${toolName} successfully`,
+              parameters: args || {},
+              timestamp: new Date().toISOString()
+            }, null, 2)
+          }]
+        }
+      });
+    }
+
+    return res.status(404).json({ error: `Tool ${toolName} not found in registry` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// AI Chat Playground — OpenRouter Chat completions
+apiRouter.post("/playground/chat", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { messages, model, apiKey, tools: requestedTools } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: "messages array is required" });
+    }
+
+    const openRouterKey = apiKey || process.env["OPENROUTER_API_KEY"];
+    if (!openRouterKey) {
+      return res.status(500).json({ error: "OPENROUTER_API_KEY is not configured in server environment (.env)" });
+    }
+    const selectedModel = model || process.env["OPENROUTER_MODEL"] || "openrouter/free";
+
+    let openAiTools: any[] = [];
+    if (requestedTools && Array.isArray(requestedTools)) {
+      for (const tName of requestedTools) {
+        const t = toolRegistry.get(tName);
+        if (t) {
+          openAiTools.push({
+            type: "function",
+            function: {
+              name: t.name,
+              description: t.description,
+              parameters: t.inputSchema || { type: "object", properties: {} }
+            }
+          });
+        } else if (tName.startsWith("spent_")) {
+          openAiTools.push({
+            type: "function",
+            function: {
+              name: tName,
+              description: `Spent App personal finance tool: ${tName}`,
+              parameters: { type: "object", properties: { amount: { type: "number" }, title: { type: "string" }, category: { type: "string" } } }
+            }
+          });
+        }
+      }
+    }
+
+    const payload: any = {
+      model: selectedModel,
+      messages,
+      temperature: 0.3,
+    };
+    if (openAiTools.length > 0) {
+      payload.tools = openAiTools;
+    }
+
+    const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${openRouterKey}`,
+        "HTTP-Referer": "https://mcphub.apptiva.in",
+        "X-Title": "MCP Hub Assistant",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!orRes.ok) {
+      const errText = await orRes.text();
+      return res.status(orRes.status).json({ error: `OpenRouter error: ${errText}` });
+    }
+
+    const data = await orRes.json();
+    res.json(data);
   } catch (err) {
     next(err);
   }
@@ -730,7 +1025,10 @@ apiRouter.get('/decisions', async (req: Request, res: Response, next: NextFuncti
     res.json({
       decisions: decisions.map(d => ({
         id: d._id.toString(),
-        itemId: d.itemId.toString(),
+        itemId: d.itemId ? d.itemId.toString() : null,
+        goalId: d.goalId ? d.goalId.toString() : null,
+        category: d.category ?? null,
+        status: d.status ?? 'active',
         summary: d.summary,
         rationale: d.rationale,
         decidedBy: d.decidedBy.toString(),

@@ -91,3 +91,15 @@ export const CONFIRMATION_TOKEN_TTL_SECONDS = 60;
 
 // --- Default Timezone ---
 export const DEFAULT_TIMEZONE = 'Asia/Kolkata';
+
+// --- Constraint Types (Agent Core) ---
+export const CONSTRAINT_TYPES = ['budget', 'deadline', 'preference', 'resource', 'dependency'] as const;
+export type ConstraintType = (typeof CONSTRAINT_TYPES)[number];
+
+// --- Confidence Levels (Provenance) ---
+export const CONFIDENCE_LEVELS = ['explicit', 'derived', 'unknown'] as const;
+export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[number];
+
+// --- Due Date Sources (Provenance) ---
+export const DUE_DATE_SOURCES = ['user_set', 'inferred', 'calendar_sync', 'system'] as const;
+export type DueDateSource = (typeof DUE_DATE_SOURCES)[number];

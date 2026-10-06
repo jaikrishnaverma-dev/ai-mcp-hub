@@ -25,6 +25,7 @@ import {
   type CalendarEventView,
   type CalendarConflict,
   type FreeSlot,
+  type GetCalendarInput,
 } from '@assistant/shared';
 
 const log = createModuleLogger('calendar');
@@ -419,5 +420,43 @@ export const calendarService = {
     }
 
     return { slots, total: slots.length };
+  },
+
+  async getCalendar(
+    params: GetCalendarInput,
+    ctx: ServiceContext,
+  ) {
+    const startDate = params.startDate;
+    const endDate = params.endDate ?? new Date(new Date(startDate).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const view = await this.getCalendarView({
+      startDate,
+      endDate,
+      includeRecurring: params.includeRecurring ?? true,
+    }, ctx);
+
+    let conflicts: CalendarConflict[] | undefined = undefined;
+    if (params.includeConflicts) {
+      const conflictRes = await this.checkConflicts({ startDate, endDate }, ctx);
+      conflicts = conflictRes.conflicts;
+    }
+
+    let freeSlots: FreeSlot[] | undefined = undefined;
+    if (params.findFreeSlots) {
+      const slotRes = await this.findFreeSlots({
+        date: params.findFreeSlots.date ?? startDate.split('T')[0]!,
+        durationMinutes: params.findFreeSlots.durationMinutes,
+        startHour: params.findFreeSlots.startHour,
+        endHour: params.findFreeSlots.endHour,
+      }, ctx);
+      freeSlots = slotRes.slots;
+    }
+
+    return {
+      events: view.events,
+      totalCount: view.total,
+      conflicts,
+      freeSlots,
+    };
   },
 };

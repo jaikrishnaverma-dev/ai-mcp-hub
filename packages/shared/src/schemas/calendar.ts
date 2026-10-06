@@ -79,3 +79,25 @@ export const freeSlotOutput = z.object({
   endAt: z.string(),
   durationMinutes: z.number(),
 });
+
+// --- Consolidated Calendar Intelligence Input ---
+
+export const getCalendarInput = z.object({
+  startDate: z.string().datetime({ message: 'startDate must be ISO 8601' }),
+  endDate: z.string().datetime().optional().describe('End of calendar window (defaults to 7 days after startDate)'),
+  includeConflicts: z.preprocess(
+    (v) => v === 'true' || v === true,
+    z.boolean().default(false),
+  ).describe('If true, detects and returns conflicting event overlaps in the window'),
+  findFreeSlots: z.object({
+    durationMinutes: z.coerce.number().min(5).max(480).default(30),
+    date: z.string().optional().describe('Date for free slot search (YYYY-MM-DD), defaults to startDate day'),
+    startHour: z.coerce.number().min(0).max(23).default(9),
+    endHour: z.coerce.number().min(1).max(24).default(18),
+  }).optional().describe('If specified, computes available free gaps of requested duration during working hours'),
+  includeRecurring: z.preprocess(
+    (v) => v === 'true' || v === true,
+    z.boolean().default(true),
+  ),
+});
+export type GetCalendarInput = z.infer<typeof getCalendarInput>;

@@ -74,6 +74,10 @@ export interface Workflow {
   status: 'active' | 'revoked';
   scopes: string[];
   ownerId: string;
+  isPublic?: boolean;
+  likes?: number;
+  commentsCount?: number;
+  authorName?: string;
   createdAt: string;
 }
 
@@ -230,21 +234,139 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 // ─── Category helper ──────────────────────────────────────────────────────────
 
-const TOOL_CATEGORIES: Record<string, string> = {
-  get_daily_brief: 'Planning & Briefing',
-  create_task: 'Task Management',
-  update_task: 'Task Management',
-  complete_task: 'Task Management',
-  list_tasks: 'Task Management',
-  get_task: 'Task Management',
-  log_decision: 'Architecture & Decisions',
-  link_tasks: 'Dependencies & Graphs',
-  set_blocker: 'Blocker Tracking',
-};
+export const TOOL_ROLE_GROUPS = [
+  'Spent App & Finance',
+  'Calendar & Scheduling',
+  'Tasks & Planning',
+  'Reminders & Alerts',
+  'Agent Core & Intelligence',
+  'Knowledge & Ground Truth',
+] as const;
 
-export function categorizeTool(name: string): string {
-  return TOOL_CATEGORIES[name] || 'General Utilities';
+export function categorizeTool(name: string, isExternal?: boolean, serverName?: string): string {
+  if (isExternal || (serverName && serverName.toLowerCase().includes('spent')) || name.startsWith('spent_')) {
+    return 'Spent App & Finance';
+  }
+  switch (name) {
+    case 'get_calendar':
+    case 'create_calendar_event':
+      return 'Calendar & Scheduling';
+    case 'create_task':
+    case 'update_task':
+    case 'delete_task':
+    case 'list_tasks':
+    case 'get_task':
+    case 'link_tasks':
+    case 'explain_delay':
+    case 'get_daily_brief':
+      return 'Tasks & Planning';
+    case 'manage_reminders':
+    case 'list_reminders':
+    case 'update_notification_preferences':
+      return 'Reminders & Alerts';
+    case 'get_context':
+    case 'get_critical_path':
+    case 'verify':
+    case 'search':
+    case 'get_journal':
+      return 'Agent Core & Intelligence';
+    case 'manage_constraints':
+    case 'list_constraints':
+    case 'manage_unknowns':
+    case 'list_unknowns':
+    case 'log_decision':
+    case 'list_decisions':
+      return 'Knowledge & Ground Truth';
+    default:
+      if (name.includes('spent') || name.includes('expense') || name.includes('wallet') || name.includes('split')) {
+        return 'Spent App & Finance';
+      }
+      return 'General Utilities';
+  }
 }
+
+export const DEFAULT_SPENT_TOOLS: McpTool[] = [
+  {
+    name: 'spent_add_expense',
+    description: 'Add household or personal expense to Spent App with amount, title, and auto category.',
+    requiredScope: 'write',
+    category: 'Spent App & Finance',
+    isExternal: true,
+    serverName: 'Spent App',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        amount: { type: 'number', description: 'Amount spent in INR (₹)' },
+        title: { type: 'string', description: 'Expense title / item description' },
+        category: { type: 'string', description: 'rashan_ghar, khana_nashta, kiraya_bijli_pani, etc.' },
+        home_id: { type: 'number', description: 'Target Home/Wallet ID' },
+      },
+      required: ['amount', 'title'],
+    },
+  },
+  {
+    name: 'spent_list_expenses',
+    description: 'Fetch recent expenses from Spent App filtered by date range or category.',
+    requiredScope: 'read',
+    category: 'Spent App & Finance',
+    isExternal: true,
+    serverName: 'Spent App',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        home_id: { type: 'number', description: 'Target Home ID' },
+        limit: { type: 'number', description: 'Max items to return (default: 20)' },
+      },
+    },
+  },
+  {
+    name: 'spent_get_summary',
+    description: 'Get monthly expenditure breakdown, budget health, and spend velocity from Spent App.',
+    requiredScope: 'read',
+    category: 'Spent App & Finance',
+    isExternal: true,
+    serverName: 'Spent App',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        home_id: { type: 'number', description: 'Target Home ID' },
+      },
+    },
+  },
+  {
+    name: 'spent_manage_wallet',
+    description: 'Query prepaid balance, check deficits, or manage recharge settlements in Spent App.',
+    requiredScope: 'write',
+    category: 'Spent App & Finance',
+    isExternal: true,
+    serverName: 'Spent App',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['check_balance', 'add_funds', 'record_settlement'] },
+        amount: { type: 'number' },
+      },
+      required: ['action'],
+    },
+  },
+  {
+    name: 'spent_split_bill',
+    description: 'Split shared dinner, rent, or travel bills with collaborators and compute balances.',
+    requiredScope: 'write',
+    category: 'Spent App & Finance',
+    isExternal: true,
+    serverName: 'Spent App',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        amount: { type: 'number', description: 'Total bill amount' },
+        expense_detail: { type: 'string', description: 'Description of shared outing or bill' },
+        collaborators: { type: 'array', description: 'List of collaborator IDs and split shares' },
+      },
+      required: ['amount', 'expense_detail'],
+    },
+  },
+];
 
 // ─── Initial Curated Skills ───────────────────────────────────────────────────
 
@@ -364,11 +486,21 @@ export const api = {
   // Endpoints / Workflows
   getWorkflows: () => fetchJson<{ endpoints: Workflow[] }>('/api/endpoints'),
   getEndpoints: () => fetchJson<{ endpoints: Workflow[] }>('/api/endpoints'),
+  getPublicWorkflows: () => fetchJson<{ workflows: Workflow[] }>('/api/workflows/public'),
+  likeWorkflow: (id: string) => fetchJson<{ success: boolean; likes: number }>(`/api/workflows/${id}/like`, { method: 'POST' }),
+  cloneWorkflow: (id: string) => fetchJson<{ endpoint: Workflow }>(`/api/workflows/${id}/clone`, { method: 'POST' }),
+  sendPlaygroundChat: (payload: { messages: any[]; model?: string; apiKey?: string; tools?: string[] }) =>
+    fetchJson<any>('/api/playground/chat', { method: 'POST', body: JSON.stringify(payload) }),
+  callPlaygroundTool: (payload: { toolName: string; args: any }) =>
+    fetchJson<any>('/api/playground/call-tool', { method: 'POST', body: JSON.stringify(payload) }),
   createWorkflow: (data: {
     name: string;
     toolAllowlist: string[];
     instructions?: string;
     slug?: string;
+    scopes?: string[];
+    isPublic?: boolean;
+    authorName?: string;
   }) =>
     fetchJson<{ endpoint: Workflow }>('/api/endpoints', {
       method: 'POST',
@@ -386,7 +518,7 @@ export const api = {
     }),
   updateWorkflow: (
     id: string,
-    data: Partial<Pick<Workflow, 'name' | 'toolAllowlist' | 'instructions' | 'status'>>,
+    data: Partial<Pick<Workflow, 'name' | 'toolAllowlist' | 'instructions' | 'status' | 'isPublic'>>,
   ) =>
     fetchJson<{ endpoint: Workflow }>(`/api/endpoints/${id}`, {
       method: 'PATCH',
@@ -394,7 +526,7 @@ export const api = {
     }),
   updateEndpoint: (
     id: string,
-    data: Partial<Pick<Workflow, 'name' | 'toolAllowlist' | 'instructions' | 'status'>>,
+    data: Partial<Pick<Workflow, 'name' | 'toolAllowlist' | 'instructions' | 'status' | 'isPublic'>>,
   ) =>
     fetchJson<{ endpoint: Workflow }>(`/api/endpoints/${id}`, {
       method: 'PATCH',
@@ -423,9 +555,13 @@ export const api = {
       userEmail: string;
     }>('/api/external-mcps/spent-details'),
   addExternalMcp: (data: { name: string; url: string; authToken?: string }) =>
-    fetchJson<{ success: boolean; integration: ExternalMcpIntegration }>('/api/external-mcps', {
+    fetchJson<{ success: boolean; updated?: boolean; integration: ExternalMcpIntegration }>('/api/external-mcps', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+  refreshExternalMcp: (id: string) =>
+    fetchJson<{ success: boolean; integration: ExternalMcpIntegration }>(`/api/external-mcps/${id}/refresh`, {
+      method: 'POST',
     }),
   testExternalMcp: (data: { url: string; authToken?: string }) =>
     fetchJson<{ success: boolean; count: number; tools: ExternalMcpTool[] }>('/api/external-mcps/test', {

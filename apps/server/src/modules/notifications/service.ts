@@ -34,6 +34,7 @@ import {
   type ServiceContext,
   type NotificationChannel,
   type NotificationType,
+  type ManageRemindersInput,
 } from '@assistant/shared';
 
 const log = createModuleLogger('notifications');
@@ -714,6 +715,30 @@ export const notificationsService = {
         return `Reminder for "${itemTitle}"`;
       default:
         return `Reminder for "${itemTitle}"`;
+    }
+  },
+
+  async manageReminders(
+    params: ManageRemindersInput,
+    ctx: ServiceContext,
+  ) {
+    if (params.action === 'set') {
+      if (!params.itemId) {
+        throw new ValidationError('itemId is required when setting a reminder');
+      }
+      return await this.setReminder({
+        itemId: params.itemId,
+        trigger: params.trigger ?? 'at_time',
+        offsetMinutes: params.offsetMinutes,
+        triggerAt: params.triggerAt,
+        channels: params.channels,
+        reason: params.reason,
+      }, ctx);
+    } else {
+      if (!params.reminderId) {
+        throw new ValidationError('reminderId is required when cancelling a reminder');
+      }
+      return await this.cancelReminder(params.reminderId, params.reason, ctx);
     }
   },
 };

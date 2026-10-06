@@ -152,6 +152,9 @@ itemSchema.index({ ownerId: 1, dueAt: 1, status: 1, deletedAt: 1 });
 // Children lookup: find all items under a parent
 itemSchema.index({ parentId: 1, type: 1, deletedAt: 1 });
 
+// Full-text search index for agent search tool
+itemSchema.index({ title: 'text', body: 'text' });
+
 // --- Query middleware: auto-exclude soft-deleted items ---
 
 function addSoftDeleteFilter(this: mongoose.Query<unknown, unknown>) {

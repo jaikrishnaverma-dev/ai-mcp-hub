@@ -60,6 +60,7 @@ function toItemFull(doc: Record<string, unknown>, parentTitle?: string | null): 
     startAt: doc['startAt'] ? (doc['startAt'] as Date).toISOString() : null,
     endAt: doc['endAt'] ? (doc['endAt'] as Date).toISOString() : null,
     tz: (doc['tz'] as string) ?? DEFAULT_TIMEZONE,
+    meta: (doc['meta'] as Record<string, unknown>) ?? null,
     updatedAt: (doc['updatedAt'] as Date).toISOString(),
     deletedAt: doc['deletedAt'] ? (doc['deletedAt'] as Date).toISOString() : null,
   };
@@ -144,6 +145,9 @@ interface CreateItemParams {
   priority?: ItemPriority;
   dueAt?: string;
   estimateMin?: number;
+  confidence?: 'explicit' | 'derived' | 'unknown';
+  dueDateSource?: 'user_set' | 'inferred' | 'calendar_sync' | 'system';
+  meta?: Record<string, unknown>;
   reason?: string;
 }
 
@@ -155,6 +159,14 @@ interface UpdateItemParams {
   priority?: ItemPriority;
   dueAt?: string | null;
   estimateMin?: number | null;
+  confidence?: 'explicit' | 'derived' | 'unknown';
+  dueDateSource?: 'user_set' | 'inferred' | 'calendar_sync' | 'system';
+  meta?: Record<string, unknown>;
+  blockerReason?: string;
+  waitingOnName?: string;
+  waitingOnUserId?: string;
+  followUpAt?: string;
+  deadline?: string;
   reason?: string;
 }
 
@@ -187,7 +199,13 @@ export const itemsService = {
         // 1. Validate parent hierarchy
         const parent = await validateParent(params.type, params.parentId, ctx.userId, session);
 
-        // 2. Create item
+        // 2. Create item with provenance meta
+        const itemMeta: Record<string, unknown> = {
+          ...(params.meta || {}),
+          ...(params.confidence ? { confidence: params.confidence } : {}),
+          ...(params.dueDateSource ? { dueDateSource: params.dueDateSource } : {}),
+        };
+
         const [item] = await Item.create(
           [
             {
@@ -201,6 +219,7 @@ export const itemsService = {
               dueAt: params.dueAt ? new Date(params.dueAt) : undefined,
               estimateMin: params.estimateMin,
               tz: DEFAULT_TIMEZONE,
+              meta: Object.keys(itemMeta).length > 0 ? itemMeta : undefined,
             },
           ],
           { session },
@@ -247,7 +266,13 @@ export const itemsService = {
   async updateItem(
     params: UpdateItemParams,
     ctx: ServiceContext,
-  ): Promise<{ item: ItemFull; changes: Array<{ field: string; from: unknown; to: unknown }>; activity: { id: string } }> {
+  ): Promise<{
+    item: ItemFull;
+    changes: Array<{ field: string; from: unknown; to: unknown }>;
+    unblocked: ItemSummary[];
+    blocker?: Record<string, unknown>;
+    activity: { id: string };
+  }> {
     const session = await mongoose.startSession();
     try {
       return await session.withTransaction(async () => {
@@ -268,7 +293,23 @@ export const itemsService = {
         if (params.dueAt !== undefined) updates['dueAt'] = params.dueAt ? new Date(params.dueAt) : null;
         if (params.estimateMin !== undefined) updates['estimateMin'] = params.estimateMin;
 
-        if (Object.keys(updates).length === 0) {
+        // Provenance & metadata updates
+        if (params.confidence !== undefined || params.dueDateSource !== undefined || params.meta !== undefined) {
+          const existingMeta = (item.meta as Record<string, unknown>) || {};
+          updates['meta'] = {
+            ...existingMeta,
+            ...(params.meta || {}),
+            ...(params.confidence !== undefined ? { confidence: params.confidence } : {}),
+            ...(params.dueDateSource !== undefined ? { dueDateSource: params.dueDateSource } : {}),
+          };
+        }
+
+        // If blockerReason provided with status=blocked (or blockerReason provided alone)
+        if (params.blockerReason && params.status === undefined) {
+          updates['status'] = 'blocked';
+        }
+
+        if (Object.keys(updates).length === 0 && !params.blockerReason) {
           throw new ValidationError('No fields to update');
         }
 
@@ -279,6 +320,90 @@ export const itemsService = {
         // Build change diff
         const changes = buildChanges(oldDoc, updates);
 
+        // 1. Dependency unblocking cascade if status transitioned to done
+        const unblocked: ItemSummary[] = [];
+        if (params.status === 'done' && oldDoc['status'] !== 'done') {
+          const blockingLinks = await Link.find({
+            toId: item._id,
+            kind: 'depends_on',
+          }).session(session);
+
+          for (const link of blockingLinks) {
+            const dependentItem = await Item.findById(link.fromId).session(session);
+            if (!dependentItem || dependentItem.status !== 'blocked') continue;
+
+            const allDeps = await Link.find({
+              fromId: dependentItem._id,
+              kind: 'depends_on',
+            }).session(session);
+
+            const depItemIds = allDeps.map(d => d.toId);
+            const unresolvedDeps = await Item.countDocuments({
+              _id: { $in: depItemIds },
+              status: { $ne: 'done' },
+            }).session(session);
+
+            if (unresolvedDeps === 0) {
+              dependentItem.status = 'todo';
+              await dependentItem.save({ session });
+
+              await Activity.create(
+                [
+                  {
+                    itemId: dependentItem._id,
+                    actorId: new mongoose.Types.ObjectId(ctx.userId),
+                    actorType: 'system',
+                    action: 'unblocked',
+                    changes: [{ field: 'status', from: 'blocked', to: 'todo' }],
+                    reason: `Dependency "${item.title}" was completed`,
+                  },
+                ],
+                { session },
+              );
+
+              unblocked.push(toItemSummary(asRecord(dependentItem.toObject())));
+            }
+          }
+        }
+
+        // 2. Blocker creation if status=blocked and blockerReason provided
+        let blockerData: Record<string, unknown> | undefined = undefined;
+        if (item.status === 'blocked' && params.blockerReason) {
+          const [blocker] = await Blocker.create(
+            [
+              {
+                itemId: item._id,
+                reason: params.blockerReason,
+                waitingOnUserId: params.waitingOnUserId
+                  ? new mongoose.Types.ObjectId(params.waitingOnUserId)
+                  : undefined,
+                waitingOnName: params.waitingOnName,
+                followUpAt: params.followUpAt ? new Date(params.followUpAt) : undefined,
+                deadline: params.deadline ? new Date(params.deadline) : undefined,
+              },
+            ],
+            { session },
+          );
+          if (blocker) {
+            blockerData = {
+              id: blocker._id.toString(),
+              reason: blocker.reason,
+              waitingOnName: blocker.waitingOnName ?? null,
+              followUpAt: blocker.followUpAt ? blocker.followUpAt.toISOString() : null,
+              deadline: blocker.deadline ? blocker.deadline.toISOString() : null,
+            };
+          }
+        }
+
+        // 3. Auto-resolve active blockers if item was unblocked (transitioned from blocked to todo/in_progress)
+        if (oldDoc['status'] === 'blocked' && (params.status === 'in_progress' || params.status === 'todo' || params.status === 'done')) {
+          await Blocker.updateMany(
+            { itemId: item._id, resolvedAt: null },
+            { $set: { resolvedAt: new Date() } },
+            { session },
+          );
+        }
+
         // Log activity
         const [activity] = await Activity.create(
           [
@@ -286,9 +411,9 @@ export const itemsService = {
               itemId: item._id,
               actorId: new mongoose.Types.ObjectId(ctx.userId),
               actorType: ctx.actorType,
-              action: 'updated',
+              action: params.status === 'done' ? 'completed' : 'updated',
               changes,
-              reason: params.reason,
+              reason: params.reason ?? params.blockerReason,
             },
           ],
           { session },
@@ -306,6 +431,8 @@ export const itemsService = {
         return {
           item: toItemFull(asRecord(item.toObject()), parentTitle),
           changes,
+          unblocked,
+          ...(blockerData ? { blocker: blockerData } : {}),
           activity: { id: activity!._id.toString() },
         };
       });

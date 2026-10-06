@@ -33,6 +33,8 @@ import './modules/notifications/model.js';
 import './modules/notifications/preferences-model.js';
 import './modules/notifications/push-subscription-model.js';
 import './modules/notifications/notification-log-model.js';
+// Agent Core models (Phase 3)
+import './modules/constraints/model.js';
 import { oauthRouter } from './modules/auth/oauth-routes.js';
 
 const PORT = parseInt(process.env['PORT'] || '3000', 10);

@@ -35,3 +35,32 @@ export const activityList = z.object({
   total: z.number(),
 });
 export type ActivityList = z.infer<typeof activityList>;
+
+// --- Agent Journal (Audit trail query) ---
+
+export const getJournalInput = z.object({
+  itemId: objectIdString.optional().describe('Filter journal entries by item ID'),
+  goalId: objectIdString.optional().describe('Filter journal entries by goal ID (all items under goal)'),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+export type GetJournalInput = z.infer<typeof getJournalInput>;
+
+export const journalEntry = z.object({
+  id: z.string(),
+  itemId: z.string(),
+  itemTitle: z.string().nullable(),
+  actorId: z.string(),
+  actorType: z.string(),
+  action: z.string(),
+  changes: z.array(changeRecord),
+  reason: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type JournalEntry = z.infer<typeof journalEntry>;
+
+export const getJournalOutput = z.object({
+  entries: z.array(journalEntry),
+  total: z.number(),
+  summary: z.string(),
+});
+export type GetJournalOutput = z.infer<typeof getJournalOutput>;

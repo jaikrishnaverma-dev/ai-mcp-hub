@@ -8,6 +8,7 @@ import { CatalogView } from './components/CatalogView.js';
 import { DataBrowserView } from './components/DataBrowserView.js';
 import { OAuthConsentView } from './components/OAuthConsentView.js';
 import { SettingsView } from './components/SettingsView.js';
+import { PlaygroundView } from './components/PlaygroundView.js';
 import { LoginModal } from './components/LoginModal.js';
 
 import {
@@ -43,6 +44,8 @@ export function App() {
   const navigate = useNavigate();
 
   const isOAuthRoute = location.pathname.startsWith('/oauth/authorize');
+  const isPlaygroundRoute = location.pathname.startsWith('/playground');
+  const hideChrome = isOAuthRoute || isPlaygroundRoute;
   const activeTab = getActiveTabFromPath(location.pathname);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(getActiveUser());
   const [loginModalOpen, setLoginModalOpen] = useState(false);
@@ -95,7 +98,7 @@ export function App() {
   return (
     <div className="min-h-screen flex flex-col bg-[#f4f4f5] dark:bg-background text-foreground">
       {/* Top Navbar (hidden on standalone OAuth consent screen) */}
-      {!isOAuthRoute && (
+      {!hideChrome && (
         <Navbar
           activeTab={activeTab}
           onTabChange={handleTabChange}
@@ -108,7 +111,7 @@ export function App() {
       )}
 
       {/* Main Content Area — React Router Routes */}
-      <main className={`flex-1 ${isOAuthRoute ? 'p-0' : 'pb-24 sm:pb-12'}`}>
+      <main className={`flex-1 ${hideChrome ? 'h-screen flex flex-col p-0 overflow-hidden' : 'pb-24 sm:pb-12'}`}>
         <Routes>
           <Route path="/" element={<Navigate to="/tools" replace />} />
           <Route
@@ -137,6 +140,15 @@ export function App() {
             path="/workflows"
             element={
               <WorkflowsView
+                currentUser={currentUser}
+                onRequireAuth={handleOpenLogin}
+              />
+            }
+          />
+          <Route
+            path="/playground"
+            element={
+              <PlaygroundView
                 currentUser={currentUser}
                 onRequireAuth={handleOpenLogin}
               />
@@ -177,7 +189,7 @@ export function App() {
       </main>
 
       {/* Mobile Fixed Bottom Navigation Bar (< 768px, hidden on OAuth screen) */}
-      {!isOAuthRoute && (
+      {!hideChrome && (
         <MobileBottomNav
           activeTab={activeTab}
           onTabChange={handleTabChange}

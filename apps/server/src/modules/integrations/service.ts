@@ -154,22 +154,71 @@ export class ExternalMcpService {
     return ExternalMcp.find({ userId, status: 'active' }).sort({ createdAt: -1 });
   }
 
+  /**
+   * Add or update an external MCP integration.
+   * If an integration with the same URL already exists for this user, it updates
+   * the tools and credentials in-place rather than creating duplicates.
+   */
   async addIntegration(
     userId: string,
     data: { name: string; url: string; authToken?: string },
-  ): Promise<ExternalMcpDocument> {
-    const tools = await this.fetchRemoteTools(data.url, data.authToken);
+  ): Promise<{ doc: ExternalMcpDocument; isNew: boolean }> {
+    const trimmedUrl = data.url.trim().replace(/\/+$/, '');
+    const tools = await this.fetchRemoteTools(trimmedUrl, data.authToken);
+
+    // Look for existing integration by normalized URL
+    const existing = await ExternalMcp.findOne({
+      userId,
+      $or: [
+        { url: trimmedUrl },
+        { url: `${trimmedUrl}/` },
+        { url: data.url.trim() },
+      ],
+    });
+
+    if (existing) {
+      existing.name = data.name.trim();
+      existing.url = trimmedUrl;
+      if (data.authToken !== undefined && data.authToken.trim() !== '') {
+        existing.authToken = data.authToken.trim();
+      }
+      existing.tools = tools;
+      existing.status = 'active';
+      await existing.save();
+
+      logger.info({ userId, integrationId: existing._id, name: existing.name }, 'Updated existing external MCP integration');
+      return { doc: existing, isNew: false };
+    }
 
     const doc = await ExternalMcp.create({
       userId,
       name: data.name.trim(),
-      url: data.url.trim(),
+      url: trimmedUrl,
       authToken: data.authToken?.trim() || undefined,
       tools,
       status: 'active',
     });
 
-    return doc;
+    logger.info({ userId, integrationId: doc._id, name: doc.name }, 'Created new external MCP integration');
+    return { doc, isNew: true };
+  }
+
+  /**
+   * Re-sync/refresh remote tools for an existing external MCP integration.
+   */
+  async refreshIntegration(userId: string, id: string): Promise<ExternalMcpDocument> {
+    const integration = await ExternalMcp.findOne({ _id: id, userId });
+    if (!integration) {
+      throw new AppError('External MCP integration not found', 404, 'NOT_FOUND');
+    }
+
+    const tools = await this.fetchRemoteTools(integration.url, integration.authToken);
+    integration.tools = tools;
+    integration.status = 'active';
+    await integration.save();
+
+    logger.info({ userId, integrationId: id, toolCount: tools.length }, 'Refreshed external MCP tools');
+    return integration;
   }
 
   async removeIntegration(userId: string, id: string): Promise<boolean> {

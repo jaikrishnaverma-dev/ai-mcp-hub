@@ -464,6 +464,77 @@ export function DataBrowserView({ currentUser, onRequireAuth }: DataBrowserViewP
         </div>
       </div>
 
+      {/* Mobile-First Metric Glance Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <button
+          onClick={() => setActiveTab('tasks')}
+          className={`p-3.5 rounded-2xl border text-left transition-all ${
+            activeTab === 'tasks'
+              ? 'border-purple-500/40 bg-purple-500/10 dark:bg-purple-950/30'
+              : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Active Tasks</span>
+            <FolderKanban className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+          </div>
+          <p className="text-xl font-extrabold text-zinc-950 dark:text-zinc-100 mt-1">
+            {tasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled').length}
+          </p>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('blockers')}
+          className={`p-3.5 rounded-2xl border text-left transition-all ${
+            activeTab === 'blockers'
+              ? 'border-red-500/40 bg-red-500/10 dark:bg-red-950/30'
+              : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Blockers</span>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+          </div>
+          <p className="text-xl font-extrabold text-zinc-950 dark:text-zinc-100 mt-1">
+            {blockers.length}
+          </p>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('decisions')}
+          className={`p-3.5 rounded-2xl border text-left transition-all ${
+            activeTab === 'decisions'
+              ? 'border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/30'
+              : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Decisions</span>
+            <Lightbulb className="h-4 w-4 text-amber-500" />
+          </div>
+          <p className="text-xl font-extrabold text-zinc-950 dark:text-zinc-100 mt-1">
+            {decisions.length}
+          </p>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('activity')}
+          className={`p-3.5 rounded-2xl border text-left transition-all ${
+            activeTab === 'activity'
+              ? 'border-blue-500/40 bg-blue-500/10 dark:bg-blue-950/30'
+              : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Audit Events</span>
+            <History className="h-4 w-4 text-blue-500" />
+          </div>
+          <p className="text-xl font-extrabold text-zinc-950 dark:text-zinc-100 mt-1">
+            {activities.length}
+          </p>
+        </button>
+      </div>
+
       {/* Explorer Sub-Tabs (Responsive 4-column segmented control on mobile, inline on desktop) */}
       <div className="w-full sm:w-fit grid grid-cols-4 sm:flex items-center gap-1 p-1 rounded-xl bg-zinc-100/80 dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800">
         <button
